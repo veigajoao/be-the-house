@@ -1,16 +1,20 @@
 pub mod admin;
 pub mod commit;
+pub mod fill;
 pub mod frontend;
 pub mod house;
 pub mod lifecycle;
 pub mod print;
+pub mod settle;
 
 pub use admin::*;
 pub use commit::*;
+pub use fill::*;
 pub use frontend::*;
 pub use house::*;
 pub use lifecycle::*;
 pub use print::*;
+pub use settle::*;
 
 use anchor_lang::prelude::*;
 

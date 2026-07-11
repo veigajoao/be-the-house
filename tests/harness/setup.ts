@@ -2,10 +2,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as anchor from "@coral-xyz/anchor";
 import {
+  AddressLookupTableAccount,
+  AddressLookupTableProgram,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { adminKeypairPath, loadKeypair, type Surfnet } from "./surfpool.js";
@@ -159,6 +164,72 @@ export async function fundActor(
 export async function usdcBalance(surfnet: Surfnet, tokenAccount: PublicKey): Promise<bigint> {
   const bal = await surfnet.connection.getTokenAccountBalance(tokenAccount);
   return BigInt(bal.value.amount);
+}
+
+/**
+ * Create + extend an address lookup table. Oracle proofs are ~770 bytes, so
+ * prove_print txs only fit the 1232-byte limit when the static accounts
+ * (programs, config, daily root PDAs) are referenced through an ALT.
+ */
+export async function createLookupTable(
+  surfnet: Surfnet,
+  payer: Keypair,
+  addresses: PublicKey[],
+): Promise<AddressLookupTableAccount> {
+  const conn = surfnet.connection;
+  const slot = await conn.getSlot("finalized");
+  const [createIx, table] = AddressLookupTableProgram.createLookupTable({
+    authority: payer.publicKey,
+    payer: payer.publicKey,
+    recentSlot: slot,
+  });
+  const ixs: TransactionInstruction[] = [createIx];
+  for (let i = 0; i < addresses.length; i += 20) {
+    ixs.push(
+      AddressLookupTableProgram.extendLookupTable({
+        lookupTable: table,
+        authority: payer.publicKey,
+        payer: payer.publicKey,
+        addresses: addresses.slice(i, i + 20),
+      }),
+    );
+  }
+  const { blockhash } = await conn.getLatestBlockhash();
+  const msg = new TransactionMessage({
+    payerKey: payer.publicKey,
+    recentBlockhash: blockhash,
+    instructions: ixs,
+  }).compileToV0Message();
+  const tx = new VersionedTransaction(msg);
+  tx.sign([payer]);
+  const sig = await conn.sendTransaction(tx);
+  await conn.confirmTransaction(sig, "confirmed");
+  // table must be one slot old before use
+  await new Promise((r) => setTimeout(r, 1_000));
+  const acc = await conn.getAddressLookupTable(table);
+  if (!acc.value) throw new Error("lookup table not found after creation");
+  return acc.value;
+}
+
+/** Send instructions as a v0 transaction referencing a lookup table. */
+export async function sendV0(
+  surfnet: Surfnet,
+  payer: Keypair,
+  ixs: TransactionInstruction[],
+  lut: AddressLookupTableAccount,
+): Promise<string> {
+  const conn = surfnet.connection;
+  const { blockhash } = await conn.getLatestBlockhash();
+  const msg = new TransactionMessage({
+    payerKey: payer.publicKey,
+    recentBlockhash: blockhash,
+    instructions: ixs,
+  }).compileToV0Message([lut]);
+  const tx = new VersionedTransaction(msg);
+  tx.sign([payer]);
+  const sig = await conn.sendTransaction(tx);
+  await conn.confirmTransaction(sig, "confirmed");
+  return sig;
 }
 
 /**
