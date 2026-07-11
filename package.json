@@ -1,0 +1,21 @@
+{
+  "name": "bethehouse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "anchor build",
+    "test": "anchor build && vitest run --root tests",
+    "test:m1": "vitest run --root tests m1-",
+    "test:m2": "vitest run --root tests m2-",
+    "test:m3": "vitest run --root tests m3-",
+    "test:m5": "vitest run --root tests m5-",
+    "capture": "tsx scripts/capture-fixtures.ts",
+    "demo": "tsx scripts/demo.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

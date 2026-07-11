@@ -1,0 +1,10 @@
+.env
+node_modules/
+target/
+dist/
+.next/
+test-ledger/
+.surfpool/
+*.log
+.DS_Store
+.anchor/

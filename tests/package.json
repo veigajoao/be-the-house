@@ -1,0 +1,15 @@
+{
+  "name": "@bethehouse/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.98.4",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}
