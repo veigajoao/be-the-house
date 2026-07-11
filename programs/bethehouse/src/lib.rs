@@ -79,6 +79,21 @@ pub mod bethehouse {
         instructions::close_print(ctx)
     }
 
+    pub fn fill_bet(ctx: Context<FillBet>) -> Result<()> {
+        instructions::fill_bet(ctx)
+    }
+
+    pub fn settle_bet(
+        ctx: Context<SettleBet>,
+        payload: crate::oracle::StatValidationInput,
+    ) -> Result<()> {
+        instructions::settle_bet(ctx, payload)
+    }
+
+    pub fn void_bet(ctx: Context<VoidBet>) -> Result<()> {
+        instructions::void_bet(ctx)
+    }
+
     pub fn refund_commit(ctx: Context<RefundCommit>) -> Result<()> {
         instructions::refund_commit(ctx)
     }
