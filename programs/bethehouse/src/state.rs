@@ -81,12 +81,28 @@ pub struct FixtureExposure {
     pub bump: u8,
 }
 
+/// A Merkle-verified StablePrice print, persisted by the permissionless
+/// `prove_print` crank. Shared by every bet filling against this print —
+/// this is what lets `fill_bet` consume TWO prints without carrying two
+/// ~770-byte proofs in one transaction (impossible within the 1232-byte
+/// tx limit). Seeds: ["print", fixture_id le, ts le].
+#[account]
+#[derive(InitSpace)]
+pub struct ProvenPrint {
+    pub fixture_id: u64,
+    /// Record timestamp (ms) — Merkle-bound, drives all window checks.
+    pub ts: i64,
+    /// Demargined fair odds x1000 per outcome (part1, draw, part2).
+    pub prices: [u32; 3],
+    /// Rent payer (may close the account later).
+    pub payer: Pubkey,
+    pub bump: u8,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
 pub enum BetState {
-    /// Committed; commit print not yet proven.
+    /// Committed; awaiting fill (both prints proven separately).
     Pending,
-    /// Commit print proven (commit_fair_odds set); awaiting target print + fill.
-    CommitProven,
     /// Filled; awaiting settlement.
     Active,
     Won,
@@ -115,11 +131,8 @@ pub struct Bet {
     pub start_time_ms: i64,
     pub frontend_fee: u64,
     pub protocol_fee: u64,
-    /// Keeper rewards still escrowed (starts at 3: prove + fill + settle/void).
+    /// Keeper rewards still escrowed (starts at 2: fill + settle/void).
     pub keeper_rewards_remaining: u8,
-    /// Fair odds (x1000) from the proven commit-window print.
-    pub commit_fair_odds: u32,
-    pub commit_print_ts_ms: i64,
     /// Final odds (x1000) after worse-of-two, spread/skew, odds_cap clamp.
     pub fill_odds: u32,
     pub fill_ts_ms: i64,
@@ -131,5 +144,6 @@ pub struct Bet {
 
 pub const ODDS_SCALE: u64 = 1000;
 pub const BPS: u64 = 10_000;
-/// prove + fill + settle-or-void.
-pub const KEEPER_CRANKS: u64 = 3;
+/// fill + settle-or-void. (prove_print cranks are compensated by rent
+/// reclaim + being a prerequisite of the rewarded fill crank.)
+pub const KEEPER_CRANKS: u64 = 2;

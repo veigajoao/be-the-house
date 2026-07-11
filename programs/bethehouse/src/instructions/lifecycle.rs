@@ -19,8 +19,7 @@ pub struct RefundCommit<'info> {
     #[account(
         mut,
         has_one = house,
-        constraint = bet.state == BetState::Pending || bet.state == BetState::CommitProven
-            @ BthError::WrongBetState,
+        constraint = bet.state == BetState::Pending @ BthError::WrongBetState,
     )]
     pub bet: Account<'info, Bet>,
 

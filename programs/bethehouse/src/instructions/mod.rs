@@ -3,12 +3,14 @@ pub mod commit;
 pub mod frontend;
 pub mod house;
 pub mod lifecycle;
+pub mod print;
 
 pub use admin::*;
 pub use commit::*;
 pub use frontend::*;
 pub use house::*;
 pub use lifecycle::*;
+pub use print::*;
 
 use anchor_lang::prelude::*;
 
