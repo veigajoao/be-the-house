@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import * as anchor from "@coral-xyz/anchor";
+import * as anchorNs from "@coral-xyz/anchor";
+// CJS/ESM interop: under plain node/tsx the CJS re-exports (BN, web3, ...)
+// live on the namespace's `default`; under vitest they're flattened.
+const anchor: typeof anchorNs = ((anchorNs as unknown as { default?: typeof anchorNs }).default ?? anchorNs) as typeof anchorNs;
 import { PublicKey } from "@solana/web3.js";
 import { TXORACLE_PROGRAM } from "./setup.js";
 

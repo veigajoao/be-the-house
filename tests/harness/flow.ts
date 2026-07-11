@@ -1,5 +1,8 @@
 // Shared end-to-end flow helpers for the fill/settle suites.
-import * as anchor from "@coral-xyz/anchor";
+import * as anchorNs from "@coral-xyz/anchor";
+// CJS/ESM interop: under plain node/tsx the CJS re-exports (BN, web3, ...)
+// live on the namespace's `default`; under vitest they're flattened.
+const anchor: typeof anchorNs = ((anchorNs as unknown as { default?: typeof anchorNs }).default ?? anchorNs) as typeof anchorNs;
 import {
   AddressLookupTableAccount,
   ComputeBudgetProgram,

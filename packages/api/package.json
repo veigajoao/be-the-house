@@ -1,0 +1,22 @@
+{
+  "name": "@bethehouse/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@bethehouse/sdk": "workspace:*",
+    "@bethehouse/txline": "workspace:*",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.98.4",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}
