@@ -23,7 +23,7 @@ const FIXTURE = 18_213_979n;
 const CLOCK = new PublicKey("SysvarC1ock11111111111111111111111111111111");
 
 const USDC = (n: number) => new anchor.BN(Math.round(n * 1_000_000));
-const KEEPER_ESCROW = 3_000_000n; // 3 cranks x 1 USDC
+const KEEPER_ESCROW = 2_000_000n; // 2 cranks (fill + settle/void) x 1 USDC
 
 async function nowMs(): Promise<number> {
   const info = await surfnet.connection.getAccountInfo(CLOCK);

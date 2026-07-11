@@ -75,6 +75,14 @@ export const pda = {
       [Buffer.from("bet"), bettor.toBuffer(), u64le(nonce)],
       PROGRAM_ID,
     )[0],
+  print: (fixtureId: bigint | number, tsMs: bigint | number) => {
+    const ts = Buffer.alloc(8);
+    ts.writeBigInt64LE(BigInt(tsMs));
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("print"), u64le(fixtureId), ts],
+      PROGRAM_ID,
+    )[0];
+  },
 };
 
 export function programFor(surfnet: Surfnet, signer: Keypair): anchor.Program {
@@ -151,4 +159,28 @@ export async function fundActor(
 export async function usdcBalance(surfnet: Surfnet, tokenAccount: PublicKey): Promise<bigint> {
   const bal = await surfnet.connection.getTokenAccountBalance(tokenAccount);
   return BigInt(bal.value.amount);
+}
+
+/**
+ * Time-shift a Bet account so its windows line up with a historical oracle
+ * print (surfpool cannot travel backward; see clock.smoke.test.ts). Decodes
+ * with the Anchor coder, patches fields, re-encodes, writes via setAccount.
+ */
+export async function patchBet(
+  surfnet: Surfnet,
+  program: anchor.Program,
+  bet: PublicKey,
+  patch: Partial<{ commitTsMs: number; targetTsMs: number; startTimeMs: number }>,
+): Promise<void> {
+  const info = await surfnet.connection.getAccountInfo(bet);
+  if (!info) throw new Error("bet account not found");
+  const decoded = program.coder.accounts.decode("bet", info.data);
+  if (patch.commitTsMs !== undefined) decoded.commitTsMs = new anchor.BN(patch.commitTsMs);
+  if (patch.targetTsMs !== undefined) decoded.targetTsMs = new anchor.BN(patch.targetTsMs);
+  if (patch.startTimeMs !== undefined) decoded.startTimeMs = new anchor.BN(patch.startTimeMs);
+  const encoded = await program.coder.accounts.encode("bet", decoded);
+  const data = Buffer.alloc(info.data.length);
+  encoded.copy(data);
+  const { setAccount } = await import("./cheats.js");
+  await setAccount(surfnet.connection, bet, { data: data.toString("hex") });
 }

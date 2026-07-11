@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 pub mod errors;
 pub mod instructions;
 pub mod math;
+pub mod oracle;
 pub mod state;
 
 use instructions::*;
@@ -62,6 +63,20 @@ pub mod bethehouse {
         start_time_ms: i64,
     ) -> Result<()> {
         instructions::commit_bet(ctx, fixture_id, outcome, stake, nonce, start_time_ms)
+    }
+
+    pub fn prove_print(
+        ctx: Context<ProvePrint>,
+        odds: crate::oracle::Odds,
+        summary: crate::oracle::OddsBatchSummary,
+        sub_tree_proof: Vec<crate::oracle::ProofNode>,
+        main_tree_proof: Vec<crate::oracle::ProofNode>,
+    ) -> Result<()> {
+        instructions::prove_print(ctx, odds, summary, sub_tree_proof, main_tree_proof)
+    }
+
+    pub fn close_print(ctx: Context<ClosePrint>) -> Result<()> {
+        instructions::close_print(ctx)
     }
 
     pub fn refund_commit(ctx: Context<RefundCommit>) -> Result<()> {
