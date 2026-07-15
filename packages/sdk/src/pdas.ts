@@ -1,7 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 
-export const TXORACLE_PROGRAM = new PublicKey("9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA");
-export const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+// Overridable for a devnet deployment (devnet txoracle:
+// 6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J, plus a devnet test mint).
+const env = typeof process !== "undefined" ? process.env : undefined;
+export const TXORACLE_PROGRAM = new PublicKey(
+  env?.TXORACLE_PROGRAM ?? "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
+);
+export const USDC_MINT = new PublicKey(
+  env?.USDC_MINT ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
 
 const MS_PER_DAY = 86_400_000;
 

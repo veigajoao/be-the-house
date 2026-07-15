@@ -1,12 +1,16 @@
-// England v Argentina (fixture 18241006, the World Cup final) — captured
-// pre-match pair ~1.7h before kickoff:
+// England v Argentina (fixture 18241006) — the FULL real lifecycle on one
+// fixture: captured pre-match pair ~1.7h before kickoff
 //   commit [2704, 3264, 3088] -> target [2653, 3259, 3162]
 //   direction per outcome: [adverse, adverse, favorable]
-// This suite runs the fill paths on the final and covers paths the earlier
-// suites didn't: oracle-silence refund after prints are proven, withdraw
-// against locked collateral, config update auth, params-affect-future-fills,
-// wrong scores root at settle, multi-frontend fee routing, netting release
-// order across settles.
+// plus the REAL final score (1-2, Argentina) captured after full-time, so
+// settlement here verifies against what actually happened.
+// When TxODDS publishes the next final (Argentina v Spain), swap with:
+//   pnpm capture odds <fixtureId> && pnpm capture scores <fixtureId>  (after FT)
+// and update FIXTURE_ID below.
+// Also covers paths the earlier suites didn't: oracle-silence refund after
+// prints are proven, withdraw against locked collateral, config update auth,
+// params-affect-future-fills, wrong scores root, multi-frontend routing,
+// netting release order across settles.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PublicKey } from "@solana/web3.js";
 import { startSurfnet, type Surfnet } from "./harness/surfpool.js";
@@ -31,10 +35,11 @@ import { timeTravel } from "./harness/cheats.js";
 let surfnet: Surfnet;
 let m: Market;
 
-const FINAL = loadOddsPair(18241006); // England v Argentina
+const FIXTURE_ID = 18241006; // England v Argentina (real result: 1-2)
+const FINAL = loadOddsPair(FIXTURE_ID);
+const FINAL_STAT = loadStatProof(FIXTURE_ID);
 const P1 = FINAL.commitPrint.raw.odds; // [2704, 3264, 3088]
 const P2 = FINAL.targetPrint.raw.odds; // [2653, 3259, 3162]
-const HOME = { pair: loadOddsPair(18218149), stat: loadStatProof(18218149) }; // Spain 2-1 Belgium
 
 const CLOCK = new PublicKey("SysvarC1ock11111111111111111111111111111111");
 async function nowMs(): Promise<number> {
@@ -46,7 +51,6 @@ beforeAll(async () => {
   surfnet = await startSurfnet();
   m = await setupMarket(surfnet); // spread 100 bps, no skew, cap 15.0, frontend 200 bps
   await provePair(surfnet, m, FINAL);
-  await provePair(surfnet, m, HOME.pair);
 });
 
 afterAll(async () => {
@@ -132,14 +136,14 @@ describe("uncovered paths", () => {
   });
 
   it("settle rejects the wrong scores root account", async () => {
-    const c = await commitOnPair(surfnet, m, HOME.pair, { outcome: 0, stakeUsdc: 5 });
-    await fillIx(m, c, HOME.pair).rpc();
+    const c = await commitOnPair(surfnet, m, FINAL, { outcome: 2, stakeUsdc: 5 });
+    await fillIx(m, c, FINAL).rpc();
     const wrongRoot = scoresRootPda(
-      HOME.stat.raw.proof.summary.updateStats.minTimestamp + 86_400_000, // next day
+      FINAL_STAT.raw.proof.summary.updateStats.minTimestamp + 86_400_000, // next day
     );
     await expect(
       m.cranker.program.methods
-        .settleBet(HOME.stat.payload)
+        .settleBet(FINAL_STAT.payload)
         .accounts({
           cranker: m.cranker.pubkey,
           crankerToken: m.cranker.usdc,
@@ -156,30 +160,36 @@ describe("uncovered paths", () => {
         .rpc(),
     ).rejects.toThrow(/WrongRootAccount/);
     // clean settle afterwards so exposure isn't left hanging
-    await settleIx(m, c, HOME.stat.payload).rpc();
+    await settleIx(m, c, FINAL_STAT.payload).rpc();
   });
 
   it("netting releases in settle order: opposing bets unwind correctly", async () => {
     const h = await addHouse(m, 6, {}, 500);
     const opts = { house: h.house, houseVault: h.vault };
-    const cWin = await commitOnPair(surfnet, m, HOME.pair, { outcome: 0, stakeUsdc: 10, ...opts });
-    await fillIx(m, cWin, HOME.pair, opts).rpc();
-    const cLose = await commitOnPair(surfnet, m, HOME.pair, { outcome: 2, stakeUsdc: 10, ...opts });
-    await fillIx(m, cLose, HOME.pair, opts).rpc();
+    // Argentina (outcome 2) actually won 1-2
+    const cWin = await commitOnPair(surfnet, m, FINAL, { outcome: 2, stakeUsdc: 10, ...opts });
+    await fillIx(m, cWin, FINAL, opts).rpc();
+    const cLose = await commitOnPair(surfnet, m, FINAL, { outcome: 0, stakeUsdc: 10, ...opts });
+    await fillIx(m, cLose, FINAL, opts).rpc();
 
     const payoutWin = (await m.bettor.program.account.bet.fetch(cWin.bet)).payout.toNumber();
     const payoutLose = (await m.bettor.program.account.bet.fetch(cLose.bet)).payout.toNumber();
 
-    // settle the WINNING bet first (Spain won): pays payoutWin, releases its leg
-    await settleIx(m, cWin, HOME.stat.payload, opts).rpc();
+    // settle the WINNING bet first (Argentina won 1-2 for real): pays
+    // payoutWin from the house vault, releases its leg
+    const bettorBefore = await usdcBalance(surfnet, m.bettor.usdc);
+    await settleIx(m, cWin, FINAL_STAT.payload, opts).rpc();
+    expect((await m.bettor.program.account.bet.fetch(cWin.bet)).state.won).toBeDefined();
+    expect((await usdcBalance(surfnet, m.bettor.usdc)) - bettorBefore).toBe(BigInt(payoutWin));
     let exp = await m.bettor.program.account.fixtureExposure.fetch(cWin.exposure);
-    expect(exp.liability[0].toNumber()).toBe(0);
-    expect(exp.liability[2].toNumber()).toBe(payoutLose);
+    expect(exp.liability[2].toNumber()).toBe(0);
+    expect(exp.liability[0].toNumber()).toBe(payoutLose);
     // remaining book: max(0,0,payoutLose) - stakes(10) locked
     expect(exp.locked.toNumber()).toBe(payoutLose - 10_000_000);
 
-    // settle the LOSING bet: nothing moves, exposure fully unwinds
-    await settleIx(m, cLose, HOME.stat.payload, opts).rpc();
+    // settle the LOSING bet (England): nothing moves, exposure fully unwinds
+    await settleIx(m, cLose, FINAL_STAT.payload, opts).rpc();
+    expect((await m.bettor.program.account.bet.fetch(cLose.bet)).state.lost).toBeDefined();
     exp = await m.bettor.program.account.fixtureExposure.fetch(cWin.exposure);
     expect(exp.locked.toNumber()).toBe(0);
     expect(exp.stakesCollected.toNumber()).toBe(0);
