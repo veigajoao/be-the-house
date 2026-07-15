@@ -96,13 +96,14 @@ export class TxLineClient {
   static fromEnv(env: NodeJS.ProcessEnv = process.env): TxLineClient {
     // Devnet MUST be https: the host 307-redirects http->https and fetch
     // strips the Authorization header on cross-origin redirects (401s).
-    const apiBase =
-      env.TXLINE_ENV === "development"
-        ? "https://txline-dev.txodds.com"
-        : "https://txline.txodds.com";
-    if (!env.TXLINE_API_TOKEN) throw new Error("TXLINE_API_TOKEN not set");
-    if (!env.TXLINE_JWT) throw new Error("TXLINE_JWT not set (run guestStart)");
-    return new TxLineClient({ apiBase, jwt: env.TXLINE_JWT, apiToken: env.TXLINE_API_TOKEN });
+    const dev = env.TXLINE_ENV === "development";
+    const apiBase = dev ? "https://txline-dev.txodds.com" : "https://txline.txodds.com";
+    // per-environment credential sets; TXLINE_DEV_* used when TXLINE_ENV=development
+    const jwt = (dev ? env.TXLINE_DEV_JWT : undefined) ?? env.TXLINE_JWT;
+    const apiToken = (dev ? env.TXLINE_DEV_API_TOKEN : undefined) ?? env.TXLINE_API_TOKEN;
+    if (!apiToken) throw new Error("TXLINE_API_TOKEN not set");
+    if (!jwt) throw new Error("TXLINE_JWT not set (run guestStart)");
+    return new TxLineClient({ apiBase, jwt, apiToken });
   }
 
   get apiBase(): string {
