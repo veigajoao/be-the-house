@@ -102,6 +102,11 @@ let lastPrintTs = 0;
 let commits = 0;
 const startedAt = Date.now();
 const DEADLINE_MS = Number(process.env.DEMO_DEADLINE_MIN ?? 45) * 60_000;
+// DEMO_AUTOBET=0: don't place bets from this script — the stack (surfnet +
+// houses + API + keeper) stays up for bets placed through the frontend, and
+// there is no fill deadline.
+const AUTOBET = process.env.DEMO_AUTOBET !== "0";
+if (!AUTOBET) log("autobet OFF — place bets through the frontend (localhost:3123)");
 
 let announcedFill = false;
 for (;;) {
@@ -126,14 +131,14 @@ for (;;) {
     await surfnet.stop();
     process.exit(0);
   }
-  if (Date.now() - startedAt > DEADLINE_MS && !active) {
+  if (AUTOBET && Date.now() - startedAt > DEADLINE_MS && !active) {
     log("deadline without a fill — exiting (expired commits refund automatically)");
     api.kill();
     await surfnet.stop();
     process.exit(1);
   }
 
-  if (!active) {
+  if (AUTOBET && !active) {
     const updates = await txline.oddsUpdates(fixtureId);
     const stable = updates
       .filter(
