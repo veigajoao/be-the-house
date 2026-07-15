@@ -94,9 +94,11 @@ export class TxLineClient {
   }
 
   static fromEnv(env: NodeJS.ProcessEnv = process.env): TxLineClient {
+    // Devnet MUST be https: the host 307-redirects http->https and fetch
+    // strips the Authorization header on cross-origin redirects (401s).
     const apiBase =
       env.TXLINE_ENV === "development"
-        ? "http://txline-dev.txodds.com"
+        ? "https://txline-dev.txodds.com"
         : "https://txline.txodds.com";
     if (!env.TXLINE_API_TOKEN) throw new Error("TXLINE_API_TOKEN not set");
     if (!env.TXLINE_JWT) throw new Error("TXLINE_JWT not set (run guestStart)");
