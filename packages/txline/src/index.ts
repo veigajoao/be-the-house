@@ -120,7 +120,11 @@ export class TxLineClient {
   private async get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
     const url = new URL(`${this.cfg.apiBase}/api/${path}`);
     for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, String(v));
-    const res = await fetch(url, { headers: this.headers() });
+    // hard timeout: a single hung request must not freeze a keeper loop
+    const res = await fetch(url, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(30_000),
+    });
     if (!res.ok) {
       const body = await res.text();
       throw new TxLineError(res.status, `${path}: ${res.status} ${body.slice(0, 200)}`);
