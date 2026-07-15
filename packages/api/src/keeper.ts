@@ -74,8 +74,36 @@ export class Keeper {
     log("created cranker USDC ATA", this.crankerToken.toBase58());
   }
 
+  // Public devnet RPC rate-limits getProgramAccounts hard, so full discovery
+  // runs only every DISCOVERY_EVERY ticks; in between, known bets are polled
+  // with cheap getMultipleAccounts calls.
+  private known = new Set<string>();
+  private tickCount = 0;
+  private static DISCOVERY_EVERY = 5;
+
+  private async fetchBets(): Promise<{ publicKey: PublicKey; account: BetAccount }[]> {
+    this.tickCount++;
+    if (this.known.size === 0 || this.tickCount % Keeper.DISCOVERY_EVERY === 1) {
+      const all = await (this.client.program.account as any).bet.all();
+      this.known = new Set(all.map((b: any) => b.publicKey.toBase58()));
+      return all;
+    }
+    const keys = [...this.known].map((k) => new PublicKey(k));
+    const out: { publicKey: PublicKey; account: BetAccount }[] = [];
+    const coder = this.client.program.coder.accounts;
+    for (let i = 0; i < keys.length; i += 100) {
+      const chunk = keys.slice(i, i + 100);
+      const infos = await this.client.connection.getMultipleAccountsInfo(chunk);
+      infos.forEach((info, j) => {
+        if (info) out.push({ publicKey: chunk[j], account: coder.decode("bet", info.data) });
+        else this.known.delete(chunk[j].toBase58()); // closed account
+      });
+    }
+    return out;
+  }
+
   async tick(): Promise<void> {
-    const bets = await (this.client.program.account as any).bet.all();
+    const bets = await this.fetchBets();
     const nowMs = Date.now();
 
     for (const { publicKey, account } of bets as { publicKey: PublicKey; account: BetAccount }[]) {
@@ -160,7 +188,10 @@ export class Keeper {
   ): Promise<void> {
     const fixtureId = Number(bet.fixtureId);
     const prints = await this.pickPrints(fixtureId, commitTs, targetTs);
-    if (!prints) return; // no qualifying prints yet (or ever -> refund later)
+    if (!prints) {
+      log(`bet ${betPda.toBase58().slice(0, 8)}: no qualifying prints in the fill windows yet`);
+      return; // (oracle silence -> expiry refund eventually)
+    }
 
     // proofs 404 until the 5-min batch root is published (~35s past boundary)
     let commitProof, targetProof;
