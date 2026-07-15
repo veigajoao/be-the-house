@@ -48,7 +48,25 @@ export class BthClient {
     idl: anchorNs.Idl,
     readonly signer: Keypair,
   ) {
-    const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(signer), {
+    // anchor's Wallet is Node-only (missing from the ESM/browser build that
+    // webpack picks) — a minimal wallet object is all AnchorProvider needs.
+    const wallet = {
+      publicKey: signer.publicKey,
+      payer: signer,
+      signTransaction: async <T,>(tx: T): Promise<T> => {
+        if (tx instanceof VersionedTransaction) tx.sign([signer]);
+        else (tx as { partialSign(k: Keypair): void }).partialSign(signer);
+        return tx;
+      },
+      signAllTransactions: async <T,>(txs: T[]): Promise<T[]> => {
+        for (const tx of txs) {
+          if (tx instanceof VersionedTransaction) tx.sign([signer]);
+          else (tx as { partialSign(k: Keypair): void }).partialSign(signer);
+        }
+        return txs;
+      },
+    };
+    const provider = new anchor.AnchorProvider(connection, wallet as anchorNs.Wallet, {
       commitment: "confirmed",
     });
     this.program = new anchor.Program(idl, provider);

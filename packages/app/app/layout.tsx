@@ -1,24 +1,20 @@
 import type { ReactNode } from "react";
+import "./globals.css";
 
-export const metadata = { title: "BeTheHouse — demo" };
+export const metadata = { title: "BeTheHouse — permissionless sportsbook" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          background: "#0b0e14",
-          color: "#e6e6e6",
-          margin: 0,
-          padding: "2rem",
-        }}
-      >
-        <h1 style={{ fontSize: "1.2rem" }}>
-          🎲 BeTheHouse <span style={{ opacity: 0.5 }}>— permissionless sportsbook demo</span>
-        </h1>
-        {children}
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

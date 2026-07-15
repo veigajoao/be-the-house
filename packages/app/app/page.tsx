@@ -1,49 +1,101 @@
-import Link from "next/link";
-import { API_URL } from "../lib/server";
+"use client";
+// Shell: masthead + wallet strip + Bet/House tabs (football-pools coupon
+// visual direction — see .context design spec).
+import { useCallback, useEffect, useState } from "react";
+import Bettor from "./bettor";
+import House from "./house";
+import { fmtUsdc, type AppConfig } from "../lib/types";
 
-interface Fixture {
-  FixtureId: number;
-  Participant1: string;
-  Participant2: string;
-  StartTime: number;
-  Competition: string;
-}
+export default function App() {
+  const [tab, setTab] = useState<"bet" | "house">("bet");
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [fauceting, setFauceting] = useState(false);
 
-export const dynamic = "force-dynamic";
+  const loadConfig = useCallback(async () => {
+    try {
+      setConfig(await fetch("/api/config").then((r) => r.json()));
+    } catch {
+      setConfig(null);
+    }
+  }, []);
 
-export default async function Home() {
-  let fixtures: Fixture[] = [];
-  let error: string | null = null;
-  try {
-    const res = await fetch(`${API_URL}/fixtures`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    fixtures = ((await res.json()) as Fixture[])
-      .filter((f) => f.StartTime > Date.now() - 3 * 3600_000)
-      .sort((a, b) => a.StartTime - b.StartTime)
-      .slice(0, 20);
-  } catch (e) {
-    error = (e as Error).message;
+  useEffect(() => {
+    void loadConfig();
+    const t = setInterval(loadConfig, 10_000);
+    return () => clearInterval(t);
+  }, [loadConfig]);
+
+  async function faucet() {
+    setFauceting(true);
+    await fetch("/api/faucet", { method: "POST" });
+    await loadConfig();
+    setFauceting(false);
   }
 
   return (
-    <main>
-      <h2 style={{ fontSize: "1rem", opacity: 0.7 }}>Upcoming fixtures</h2>
-      {error && <p style={{ color: "#ff7b72" }}>API unreachable: {error}</p>}
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {fixtures.map((f) => (
-          <li key={f.FixtureId} style={{ margin: "0.5rem 0" }}>
-            <Link
-              href={`/fixture/${f.FixtureId}`}
-              style={{ color: "#79c0ff", textDecoration: "none" }}
-            >
-              {f.Participant1} v {f.Participant2}
-            </Link>{" "}
-            <span style={{ opacity: 0.5 }}>
-              {f.Competition} · {new Date(f.StartTime).toUTCString()}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </main>
+    <div className="wrap">
+      <header className="mast">
+        <div>
+          <div className="logo">
+            BeThe<span>House</span>
+          </div>
+          <div className="tag">Permissionless sportsbook · Solana · TxLINE feed</div>
+          <div className="wallet-strip">
+            {config ? (
+              <>
+                <span>
+                  wallet <b>{config.bettor.slice(0, 4)}…{config.bettor.slice(-4)}</b>
+                </span>
+                <span>
+                  balance <b>{fmtUsdc(config.bettorUsdc)} USDC</b>
+                </span>
+                <button className="faucet" disabled={fauceting} onClick={faucet}>
+                  {fauceting ? "minting…" : "+1000 USDC faucet"}
+                </button>
+              </>
+            ) : (
+              <span>connecting…</span>
+            )}
+          </div>
+        </div>
+        <div className="mast-meta">
+          1X2 FULL-TIME · PRE-MATCH ONLY
+          <br />
+          USDC · SURFNET DEMO
+          <br />
+          {config && (
+            <>
+              program {config.programId.slice(0, 6)}…{config.programId.slice(-4)}
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="tabs" role="tablist">
+        <button
+          className="tab"
+          role="tab"
+          aria-selected={tab === "bet"}
+          onClick={() => setTab("bet")}
+        >
+          Bet
+        </button>
+        <button
+          className="tab"
+          role="tab"
+          aria-selected={tab === "house"}
+          onClick={() => setTab("house")}
+        >
+          House
+        </button>
+      </div>
+
+      <div hidden={tab !== "bet"}>
+        <Bettor config={config} />
+      </div>
+      <div hidden={tab !== "house"}>
+        <House />
+      </div>
+    </div>
   );
 }

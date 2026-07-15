@@ -103,10 +103,12 @@ let commits = 0;
 const startedAt = Date.now();
 const DEADLINE_MS = Number(process.env.DEMO_DEADLINE_MIN ?? 45) * 60_000;
 
+let announcedFill = false;
 for (;;) {
   const bets = await (bettor.program.account as any).bet.all();
   const active = bets.find((b: any) => b.account.state.active);
-  if (active) {
+  if (active && !announcedFill) {
+    announcedFill = true;
     const a = active.account;
     const houseName = a.house.equals(sharp.house) ? "sharp" : "wide";
     log("🎉 FILLED at the T+15s print");
