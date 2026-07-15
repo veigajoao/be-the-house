@@ -196,6 +196,7 @@ export async function commitOnPair(
     stakeUsdc: number;
     house: PublicKey;
     houseVault: PublicKey;
+    frontend: PublicKey;
     commitTsMs: number;
     startTimeMs: number;
   }> = {},
@@ -203,6 +204,7 @@ export async function commitOnPair(
   const n = ++nonce;
   const house = opts.house ?? m.house;
   const houseVault = opts.houseVault ?? m.houseVault;
+  const frontend = opts.frontend ?? m.frontend;
   const fixture = BigInt(pair.fixtureId);
   // real "now" start_time so commit passes; patched below
   const clock = await surfnet.connection.getAccountInfo(
@@ -222,7 +224,7 @@ export async function commitOnPair(
       bettor: m.bettor.pubkey,
       escrowVault: m.protocol.escrow,
       bettorToken: m.bettor.usdc,
-      frontend: m.frontend,
+      frontend,
       house,
       houseVault,
       exposure: pda.exposure(house, fixture),
@@ -268,7 +270,12 @@ export function fillIx(
   m: Market,
   c: CommittedBet,
   pair: OddsPair,
-  opts: Partial<{ house: PublicKey; houseVault: PublicKey }> = {},
+  opts: Partial<{
+    house: PublicKey;
+    houseVault: PublicKey;
+    frontend: PublicKey;
+    frontendFeeVault: PublicKey;
+  }> = {},
 ) {
   return m.cranker.program.methods
     .fillBet()
@@ -280,8 +287,8 @@ export function fillIx(
       house: opts.house ?? m.house,
       houseVault: opts.houseVault ?? m.houseVault,
       exposure: c.exposure,
-      frontend: m.frontend,
-      frontendFeeVault: m.frontendFeeVault,
+      frontend: opts.frontend ?? m.frontend,
+      frontendFeeVault: opts.frontendFeeVault ?? m.frontendFeeVault,
       treasuryVault: m.protocol.treasury,
       commitPrint: pda.print(pair.fixtureId, pair.commitPrint.raw.odds.Ts),
       targetPrint: pda.print(pair.fixtureId, pair.targetPrint.raw.odds.Ts),
