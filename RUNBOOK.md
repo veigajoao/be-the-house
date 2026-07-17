@@ -141,7 +141,8 @@ cadence.
 Devnet StablePrice quoting gaps ~30 min between bursts, so the on-chain fill
 windows were widened via `update_config` (no redeploy — they're Config
 params): `staleness_window_ms` 120s → **2h**, `fill_tolerance_ms` 90s →
-**45min**. A bet placed during a lull fills from the last print (commit side)
+**2h**, `commit_expiry_ms` 1h → **3h** (target window must exceed the worst
+observed ~50min print gap). A bet placed during a lull fills from the last print (commit side)
 and the next burst (target side); worst case ~50 min to fill, inside the 1h
 refund expiry. Mainnet/surfnet keep the spec-tight 120s/90s. The UI quotes
 from prints up to 2h old and labels their age.
