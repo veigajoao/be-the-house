@@ -13,6 +13,19 @@ import { env } from "./env.js";
 export async function buildServer(client: BthClient, txline: TxLineClient) {
   const app = Fastify({ logger: false });
 
+  // the browser app calls this API cross-origin (3123 -> 8787)
+  app.addHook("onSend", async (_req, reply, payload) => {
+    reply.header("access-control-allow-origin", "*");
+    return payload;
+  });
+  app.options("/*", async (_req, reply) =>
+    reply
+      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-methods", "GET, POST, OPTIONS")
+      .header("access-control-allow-headers", "content-type")
+      .send(),
+  );
+
   // -- fixtures (cached 60s) --
   let fixturesCache: { at: number; data: unknown } | null = null;
   app.get("/fixtures", async () => {
