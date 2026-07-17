@@ -1,0 +1,2578 @@
+{
+  "address": "Au4V34qyUhMfAL9HfC3QLTtTi6Mua7WdqDYUdZqhEdGS",
+  "metadata": {
+    "name": "bethehouse",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "BeTheHouse — permissionless on-chain sportsbook"
+  },
+  "instructions": [
+    {
+      "name": "close_bet",
+      "discriminator": [
+        185,
+        206,
+        13,
+        184,
+        176,
+        108,
+        140,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "bettor",
+          "docs": [
+            "Rent returns to the bettor (who paid for the account at commit)."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "bet",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_exposure",
+      "discriminator": [
+        200,
+        65,
+        192,
+        229,
+        87,
+        25,
+        60,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Rent returns to the house owner."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "house"
+          ]
+        },
+        {
+          "name": "house"
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "account",
+                "path": "exposure.fixture_id",
+                "account": "FixtureExposure"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_print",
+      "discriminator": [
+        46,
+        57,
+        99,
+        36,
+        163,
+        236,
+        13,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Only the rent payer may reclaim it."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "print"
+          ]
+        },
+        {
+          "name": "print",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_bet",
+      "discriminator": [
+        111,
+        3,
+        143,
+        39,
+        141,
+        158,
+        225,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "bettor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true
+        },
+        {
+          "name": "bettor_token",
+          "writable": true
+        },
+        {
+          "name": "frontend"
+        },
+        {
+          "name": "house",
+          "writable": true
+        },
+        {
+          "name": "house_vault"
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "arg",
+                "path": "fixture_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bettor"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fixture_id",
+          "type": "u64"
+        },
+        {
+          "name": "outcome",
+          "type": "u8"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "start_time_ms",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_house",
+      "discriminator": [
+        11,
+        92,
+        141,
+        8,
+        128,
+        45,
+        64,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "house",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "house_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "house_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "house_id",
+          "type": "u16"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "HouseParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "signer": true
+        },
+        {
+          "name": "house"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "depositor_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fill_bet",
+      "discriminator": [
+        130,
+        30,
+        101,
+        44,
+        12,
+        100,
+        202,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Permissionless cranker; earns one keeper reward."
+          ],
+          "signer": true
+        },
+        {
+          "name": "cranker_token",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true
+        },
+        {
+          "name": "bet",
+          "writable": true
+        },
+        {
+          "name": "house",
+          "writable": true,
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "house_vault",
+          "writable": true
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "account",
+                "path": "bet.fixture_id",
+                "account": "Bet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "frontend",
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "frontend_fee_vault",
+          "writable": true
+        },
+        {
+          "name": "treasury_vault",
+          "writable": true
+        },
+        {
+          "name": "commit_print",
+          "docs": [
+            "Merkle-verified print prevailing at commit time (see prove_print)."
+          ]
+        },
+        {
+          "name": "target_print",
+          "docs": [
+            "Merkle-verified first print at/after target (commit + 15s)."
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_config",
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "txoracle_program"
+        },
+        {
+          "name": "treasury_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prove_print",
+      "discriminator": [
+        29,
+        232,
+        248,
+        135,
+        251,
+        171,
+        13,
+        140
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Permissionless cranker; pays the print account rent (reclaimable via",
+            "close_print once the print is no longer needed)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "print",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "odds.fixture_id"
+              },
+              {
+                "kind": "arg",
+                "path": "odds.ts"
+              }
+            ]
+          }
+        },
+        {
+          "name": "odds_root",
+          "docs": [
+            "in the handler (owner + derived key)."
+          ]
+        },
+        {
+          "name": "txoracle_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "odds",
+          "type": {
+            "defined": {
+              "name": "Odds"
+            }
+          }
+        },
+        {
+          "name": "summary",
+          "type": {
+            "defined": {
+              "name": "OddsBatchSummary"
+            }
+          }
+        },
+        {
+          "name": "sub_tree_proof",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "ProofNode"
+              }
+            }
+          }
+        },
+        {
+          "name": "main_tree_proof",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "ProofNode"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "refund_commit",
+      "discriminator": [
+        99,
+        40,
+        188,
+        37,
+        189,
+        16,
+        39,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Anyone may crank a refund; pays the tx fee, receives nothing."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true
+        },
+        {
+          "name": "bet",
+          "writable": true
+        },
+        {
+          "name": "house",
+          "writable": true,
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "account",
+                "path": "bet.fixture_id",
+                "account": "Bet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bettor_token",
+          "docs": [
+            "Full escrow goes back to the bettor."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_frontend",
+      "discriminator": [
+        57,
+        161,
+        195,
+        8,
+        8,
+        49,
+        1,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "frontend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  114,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  114,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "house"
+          ]
+        },
+        {
+          "name": "house",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "settle_bet",
+      "discriminator": [
+        115,
+        55,
+        234,
+        177,
+        227,
+        4,
+        10,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Permissionless cranker; earns one keeper reward."
+          ],
+          "signer": true
+        },
+        {
+          "name": "cranker_token",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true
+        },
+        {
+          "name": "bet",
+          "writable": true
+        },
+        {
+          "name": "house",
+          "writable": true,
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "house_vault",
+          "writable": true
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "account",
+                "path": "bet.fixture_id",
+                "account": "Bet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bettor_token",
+          "docs": [
+            "Winning payout destination — must belong to the bettor."
+          ],
+          "writable": true
+        },
+        {
+          "name": "scores_root"
+        },
+        {
+          "name": "txoracle_program"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "payload",
+          "type": {
+            "defined": {
+              "name": "StatValidationInput"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_config",
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_house_params",
+      "discriminator": [
+        123,
+        6,
+        168,
+        63,
+        1,
+        150,
+        233,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "house"
+          ]
+        },
+        {
+          "name": "house",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "HouseParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "void_bet",
+      "discriminator": [
+        36,
+        30,
+        28,
+        196,
+        66,
+        16,
+        242,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Permissionless cranker; earns one keeper reward."
+          ],
+          "signer": true
+        },
+        {
+          "name": "cranker_token",
+          "writable": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true
+        },
+        {
+          "name": "bet",
+          "writable": true
+        },
+        {
+          "name": "house",
+          "writable": true,
+          "relations": [
+            "bet"
+          ]
+        },
+        {
+          "name": "house_vault",
+          "writable": true
+        },
+        {
+          "name": "exposure",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  112,
+                  111,
+                  115,
+                  117,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              },
+              {
+                "kind": "account",
+                "path": "bet.fixture_id",
+                "account": "Bet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bettor_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "house"
+          ]
+        },
+        {
+          "name": "house",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "house.house_id",
+                "account": "House"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Bet",
+      "discriminator": [
+        147,
+        23,
+        35,
+        59,
+        15,
+        75,
+        155,
+        32
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "FixtureExposure",
+      "discriminator": [
+        250,
+        187,
+        95,
+        179,
+        96,
+        121,
+        250,
+        41
+      ]
+    },
+    {
+      "name": "Frontend",
+      "discriminator": [
+        139,
+        245,
+        53,
+        17,
+        33,
+        123,
+        239,
+        59
+      ]
+    },
+    {
+      "name": "House",
+      "discriminator": [
+        21,
+        145,
+        94,
+        109,
+        254,
+        199,
+        210,
+        151
+      ]
+    },
+    {
+      "name": "ProvenPrint",
+      "discriminator": [
+        64,
+        48,
+        233,
+        37,
+        107,
+        53,
+        50,
+        107
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "EventNotActive"
+    },
+    {
+      "code": 6001,
+      "name": "PricesMismatch"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidOddsUpdate"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidSubTreeProof"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidMainTreeProof"
+    },
+    {
+      "code": 6005,
+      "name": "TimeSlotMismatch"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidTime"
+    },
+    {
+      "code": 6007,
+      "name": "RootNotAvailable"
+    },
+    {
+      "code": 6008,
+      "name": "AccountDiscriminatorMismatch"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidPda"
+    },
+    {
+      "code": 6010,
+      "name": "TimestampMismatch"
+    },
+    {
+      "code": 6011,
+      "name": "SliceError"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidOwner"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidTimeSlot"
+    },
+    {
+      "code": 6014,
+      "name": "StakeStillLocked"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidRecipient"
+    },
+    {
+      "code": 6016,
+      "name": "ActiveSubscription"
+    },
+    {
+      "code": 6017,
+      "name": "Unauthorized"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidAccountOwner"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidMintAuthority"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidMint"
+    },
+    {
+      "code": 6021,
+      "name": "PredicateFailed"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidFixtureSubTreeProof"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidStatProof"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidStatCombination"
+    },
+    {
+      "code": 6025,
+      "name": "MissingSecondStat"
+    },
+    {
+      "code": 6026,
+      "name": "UnexpectedSecondStat"
+    },
+    {
+      "code": 6027,
+      "name": "Overflow"
+    },
+    {
+      "code": 6028,
+      "name": "TradeNotActive"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidTrader"
+    },
+    {
+      "code": 6030,
+      "name": "WinnerMismatch"
+    },
+    {
+      "code": 6031,
+      "name": "TradeTermsMismatch"
+    },
+    {
+      "code": 6032,
+      "name": "UnauthorizedSettler"
+    },
+    {
+      "code": 6033,
+      "name": "FundsBelowMinimumDeposit"
+    },
+    {
+      "code": 6034,
+      "name": "InsufficientUserBalance"
+    },
+    {
+      "code": 6035,
+      "name": "ZeroAmount"
+    },
+    {
+      "code": 6036,
+      "name": "VaultNotEmpty"
+    },
+    {
+      "code": 6037,
+      "name": "InsufficientVaultBalance"
+    },
+    {
+      "code": 6038,
+      "name": "CalculationError"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidSubscriptionTs"
+    },
+    {
+      "code": 6040,
+      "name": "CannotShortenSubscription"
+    },
+    {
+      "code": 6041,
+      "name": "InvalidWeeks"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidTimeAlignment"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidEpochDayAlignment"
+    },
+    {
+      "code": 6044,
+      "name": "AccountDataTooSmall"
+    },
+    {
+      "code": 6045,
+      "name": "InsufficientLiquidity"
+    },
+    {
+      "code": 6046,
+      "name": "InvalidAmount"
+    },
+    {
+      "code": 6047,
+      "name": "InvalidExpiration"
+    },
+    {
+      "code": 6048,
+      "name": "FixtureMismatch"
+    },
+    {
+      "code": 6049,
+      "name": "PeriodMismatch"
+    },
+    {
+      "code": 6050,
+      "name": "IntentNotActive"
+    },
+    {
+      "code": 6051,
+      "name": "OrderNotYetExpired"
+    },
+    {
+      "code": 6052,
+      "name": "TermsMismatch"
+    },
+    {
+      "code": 6053,
+      "name": "StatKeyMismatch"
+    },
+    {
+      "code": 6054,
+      "name": "InvalidVault"
+    },
+    {
+      "code": 6055,
+      "name": "EquivocationAttempt"
+    },
+    {
+      "code": 6056,
+      "name": "NumericOverflow"
+    },
+    {
+      "code": 6057,
+      "name": "InvalidAccountData"
+    },
+    {
+      "code": 6058,
+      "name": "RateLimitExceeded"
+    },
+    {
+      "code": 6059,
+      "name": "InvalidServiceLevelId"
+    },
+    {
+      "code": 6060,
+      "name": "InitialRowsLimitExceeded"
+    },
+    {
+      "code": 6061,
+      "name": "MissingStat"
+    },
+    {
+      "code": 6062,
+      "name": "ProofTooLarge"
+    },
+    {
+      "code": 6063,
+      "name": "TradeTooSmall"
+    },
+    {
+      "code": 6064,
+      "name": "MaxRowsLimitExceeded"
+    },
+    {
+      "code": 6065,
+      "name": "UnauthorizedAdmin"
+    },
+    {
+      "code": 6066,
+      "name": "InvalidAccount"
+    },
+    {
+      "code": 6067,
+      "name": "MissingSummary"
+    },
+    {
+      "code": 6068,
+      "name": "MissingProof"
+    },
+    {
+      "code": 6069,
+      "name": "TooManyStats"
+    },
+    {
+      "code": 6070,
+      "name": "DuplicateStatCoverage"
+    },
+    {
+      "code": 6071,
+      "name": "IncompleteStatCoverage"
+    },
+    {
+      "code": 6072,
+      "name": "MissingDistancePredicate"
+    },
+    {
+      "code": 6073,
+      "name": "IndexOutOfBounds"
+    },
+    {
+      "code": 6074,
+      "name": "StatNotZero"
+    }
+  ],
+  "types": [
+    {
+      "name": "Bet",
+      "docs": [
+        "A bet through its whole lifecycle (single fixed-size account, no realloc).",
+        "Seeds: [\"bet\", bettor, nonce le]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bettor",
+            "type": "pubkey"
+          },
+          {
+            "name": "house",
+            "type": "pubkey"
+          },
+          {
+            "name": "frontend",
+            "type": "pubkey"
+          },
+          {
+            "name": "fixture_id",
+            "type": "u64"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "floor(stake * odds_cap / 1000), reserved on the exposure at commit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "commit_ts_ms",
+            "type": "i64"
+          },
+          {
+            "name": "target_ts_ms",
+            "type": "i64"
+          },
+          {
+            "name": "start_time_ms",
+            "docs": [
+              "Fixture kickoff (ms). Hackathon: supplied by the SDK at commit (spec note A)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "frontend_fee",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fee",
+            "type": "u64"
+          },
+          {
+            "name": "keeper_rewards_remaining",
+            "docs": [
+              "Keeper rewards still escrowed (starts at 2: fill + settle/void)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "fill_odds",
+            "docs": [
+              "Final odds (x1000) after worse-of-two, spread/skew, odds_cap clamp."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "fill_ts_ms",
+            "type": "i64"
+          },
+          {
+            "name": "payout",
+            "docs": [
+              "floor(stake * fill_odds / 1000)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "BetState"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BetState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Won"
+          },
+          {
+            "name": "Lost"
+          },
+          {
+            "name": "Refunded"
+          },
+          {
+            "name": "Voided"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "Global protocol configuration. Seeds: [\"config\"]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_vault",
+            "docs": [
+              "Token account (authority = config PDA) receiving protocol fees."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_vault",
+            "docs": [
+              "Token account (authority = config PDA) holding bettor escrow between commit and fill/refund."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "txoracle_program",
+            "docs": [
+              "The txoracle program our fills/settlements CPI into."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_frontend_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "keeper_reward",
+            "docs": [
+              "Flat USDC reward paid per successful crank (prove / fill / settle / void)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "commit_delay_ms",
+            "docs": [
+              "target_ts = commit_ts + commit_delay_ms (spec: 15_000)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "staleness_window_ms",
+            "docs": [
+              "Commit print must satisfy: commit_ts - staleness_window_ms <= odds.ts <= commit_ts."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "fill_tolerance_ms",
+            "docs": [
+              "Target print must satisfy: target_ts <= odds.ts <= target_ts + fill_tolerance_ms."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "commit_expiry_ms",
+            "docs": [
+              "refund_commit allowed once now > target_ts + commit_expiry_ms."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "void_after_ms",
+            "docs": [
+              "void_bet allowed once now > start_time + void_after_ms."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_frontend_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "keeper_reward",
+            "type": "u64"
+          },
+          {
+            "name": "commit_delay_ms",
+            "type": "i64"
+          },
+          {
+            "name": "staleness_window_ms",
+            "type": "i64"
+          },
+          {
+            "name": "fill_tolerance_ms",
+            "type": "i64"
+          },
+          {
+            "name": "commit_expiry_ms",
+            "type": "i64"
+          },
+          {
+            "name": "void_after_ms",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FixtureExposure",
+      "docs": [
+        "Per (house, fixture) exposure book. Seeds: [\"exposure\", house, fixture_id le].",
+        "Lazily created at first commit."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "house",
+            "type": "pubkey"
+          },
+          {
+            "name": "fixture_id",
+            "type": "u64"
+          },
+          {
+            "name": "liability",
+            "docs": [
+              "Potential payout per outcome (0 = part1, 1 = draw, 2 = part2).",
+              "Pending commits count gross `reserved`; trued down to actual payout at fill."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "stakes_collected",
+            "docs": [
+              "Stakes collected from filled bets on this fixture (moved into the house vault)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "locked",
+            "docs": [
+              "max(liability) - stakes_collected, floored at 0. Portion of the vault reserved here."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "open_bets",
+            "docs": [
+              "Open (non-terminal) bets referencing this exposure; gates close_exposure."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Frontend",
+      "docs": [
+        "Registered frontend integrator. Seeds: [\"frontend\", owner]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "fee_vault",
+            "docs": [
+              "Token account (authority = frontend PDA) receiving frontend fees."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "House",
+      "docs": [
+        "An individual LP \"house\". Seeds: [\"house\", owner, house_id le]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "house_id",
+            "type": "u16"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Token account (authority = house PDA) holding the house's collateral."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "skew_coeff_bps",
+            "type": "u32"
+          },
+          {
+            "name": "odds_cap",
+            "docs": [
+              "Max odds this house pays, x1000. Bounds the collateral reserved per commit."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "max_risk_per_fixture",
+            "docs": [
+              "Caps `locked` on any single fixture."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_total_risk",
+            "docs": [
+              "Caps `total_locked` across all fixtures."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_locked",
+            "docs": [
+              "Sum of `locked` across fixtures. Vault invariant: vault.amount >= total_locked."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HouseParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "skew_coeff_bps",
+            "type": "u32"
+          },
+          {
+            "name": "odds_cap",
+            "type": "u32"
+          },
+          {
+            "name": "max_risk_per_fixture",
+            "type": "u64"
+          },
+          {
+            "name": "max_total_risk",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Odds",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "message_id",
+            "type": "string"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "bookmaker",
+            "type": "string"
+          },
+          {
+            "name": "bookmaker_id",
+            "type": "i32"
+          },
+          {
+            "name": "super_odds_type",
+            "type": "string"
+          },
+          {
+            "name": "game_state",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "in_running",
+            "type": "bool"
+          },
+          {
+            "name": "market_parameters",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "market_period",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "price_names",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "prices",
+            "type": {
+              "vec": "i32"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "OddsBatchSummary",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "update_stats",
+            "type": {
+              "defined": {
+                "name": "OddsUpdateStats"
+              }
+            }
+          },
+          {
+            "name": "odds_sub_tree_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "OddsUpdateStats",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "update_count",
+            "type": "u32"
+          },
+          {
+            "name": "min_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "max_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProofNode",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "is_right_sibling",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProvenPrint",
+      "docs": [
+        "A Merkle-verified StablePrice print, persisted by the permissionless",
+        "`prove_print` crank. Shared by every bet filling against this print —",
+        "this is what lets `fill_bet` consume TWO prints without carrying two",
+        "~770-byte proofs in one transaction (impossible within the 1232-byte",
+        "tx limit). Seeds: [\"print\", fixture_id le, ts le]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "docs": [
+              "Record timestamp (ms) — Merkle-bound, drives all window checks."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "prices",
+            "docs": [
+              "Demargined fair odds x1000 per outcome (part1, draw, part2)."
+            ],
+            "type": {
+              "array": [
+                "u32",
+                3
+              ]
+            }
+          },
+          {
+            "name": "payer",
+            "docs": [
+              "Rent payer (may close the account later)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreStat",
+      "docs": [
+        "The on-chain representation of a single, provable key-value statistic.",
+        "This is the leaf of the inner-most Merkle tree."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "key",
+            "type": "u32"
+          },
+          {
+            "name": "value",
+            "type": "i32"
+          },
+          {
+            "name": "period",
+            "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoresBatchSummary",
+      "docs": [
+        "The summary for a single fixture's scores events within a 5-minute batch.",
+        "This contains the root of the sub-tree of all events for that fixture."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "update_stats",
+            "type": {
+              "defined": {
+                "name": "ScoresUpdateStats"
+              }
+            }
+          },
+          {
+            "name": "events_sub_tree_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoresUpdateStats",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "update_count",
+            "type": "i32"
+          },
+          {
+            "name": "min_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "max_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StatLeaf",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stat",
+            "type": {
+              "defined": {
+                "name": "ScoreStat"
+              }
+            }
+          },
+          {
+            "name": "stat_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "StatValidationInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "fixture_summary",
+            "type": {
+              "defined": {
+                "name": "ScoresBatchSummary"
+              }
+            }
+          },
+          {
+            "name": "fixture_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          },
+          {
+            "name": "main_tree_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          },
+          {
+            "name": "event_stat_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "stats",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "StatLeaf"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

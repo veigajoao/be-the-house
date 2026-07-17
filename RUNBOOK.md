@@ -105,3 +105,33 @@ overrides. What a devnet deployment needs:
 
 Unverified on devnet: publisher cadence for the devnet roots (mainnet is
 5-min; check before promising fill latency in a demo).
+
+## Vercel deployment (single Next.js app)
+
+The Fastify service is retired: `/fixtures`, `/quotes`, and the proof relays
+are Next route handlers (same-origin — no CORS), the odds stream is polling
+(the UI already polls every 5s), and **the keeper is a Vercel Cron** hitting
+`/api/cron/keeper` every minute (`packages/app/vercel.json`). One-minute
+ticks are fine: fill latency is dominated by the oracle's 5-minute root
+cadence.
+
+- Vercel project root: `packages/app` (pnpm monorepo — workspace deps build
+  via `transpilePackages`).
+- Env vars: `RPC_URL`, `TXLINE_ENV=development`, `TXLINE_DEV_JWT`,
+  `TXLINE_DEV_API_TOKEN`, `TXORACLE_PROGRAM`, `USDC_MINT`,
+  `DEMO_KEYPAIR_JSON` (the keypair JSON array — demo bettor + keeper + mint
+  authority), `SURFNET_MODE=false`, `CRON_SECRET` (recommended; the route
+  checks `Authorization: Bearer`).
+- ⚠ Every-minute crons need Vercel **Pro** (Hobby caps crons at daily).
+  On Hobby, point any external pinger (e.g. cron-job.org) at
+  `/api/cron/keeper` with the bearer secret — the route is a plain GET.
+- After `anchor build`, re-sync the app's bundled IDL:
+  `cp target/idl/bethehouse.json packages/app/lib/idl/`.
+- Local single-process run (replaces the two-terminal flow):
+  ```bash
+  cd packages/app && RPC_URL=... TXLINE_ENV=development SURFNET_MODE=false \
+  TXORACLE_PROGRAM=6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J \
+  USDC_MINT=ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6 pnpm dev
+  # keeper locally: hit the cron route on an interval
+  while true; do curl -s http://127.0.0.1:3123/api/cron/keeper; sleep 20; done
+  ```

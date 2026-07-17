@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scoresRootPda } from "@bethehouse/sdk";
-import { API_URL, chain } from "../../../lib/server";
+import { chain } from "../../../lib/server";
+import { getFixtures } from "../../../lib/market";
 
 interface Fixture {
   FixtureId: number;
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   let fixtures: Fixture[] = [];
   try {
-    fixtures = (await fetch(`${API_URL}/fixtures`).then((r) => r.json())) as Fixture[];
+    fixtures = (await getFixtures()) as unknown as Fixture[];
   } catch {
     /* API down — names degrade to ids */
   }

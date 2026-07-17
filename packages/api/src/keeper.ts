@@ -21,21 +21,35 @@ import {
   TxLineError,
   type OddsRecord,
 } from "@bethehouse/txline";
-import { env } from "./env.js";
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), "[keeper]", ...a);
 
+export interface KeeperOptions {
+  /** true when the RPC is a surfpool fork: refresh oracle roots before proving. */
+  surfnetMode: boolean;
+  /** real mainnet RPC used only for surfnet root refresh. */
+  mainnetRpcUrl?: string;
+  /** run() loop interval; irrelevant for one-shot tick() (Vercel Cron). */
+  intervalMs?: number;
+}
+
 export class Keeper {
   private lut: AddressLookupTableAccount | null = null;
-  private mainnet = new Connection(env.mainnetRpcUrl, "confirmed");
+  private mainnet: Connection;
   private crankerToken: PublicKey;
   private stopped = false;
+  private ataChecked = false;
 
   constructor(
     private client: BthClient,
     private txline: TxLineClient,
+    private opts: KeeperOptions = { surfnetMode: false },
   ) {
     this.crankerToken = getAssociatedTokenAddressSync(USDC_MINT, client.signer.publicKey);
+    this.mainnet = new Connection(
+      opts.mainnetRpcUrl ?? "https://api.mainnet-beta.solana.com",
+      "confirmed",
+    );
   }
 
   stop() {
@@ -44,15 +58,13 @@ export class Keeper {
 
   async run(): Promise<void> {
     log("keeper started; cranker:", this.client.signer.publicKey.toBase58());
-    // reward destination must exist before the first fill/settle crank
-    await this.ensureCrankerAta();
     while (!this.stopped) {
       try {
         await this.tick();
       } catch (e) {
         log("tick error:", (e as Error).message);
       }
-      await new Promise((r) => setTimeout(r, env.keeperIntervalMs));
+      await new Promise((r) => setTimeout(r, this.opts.intervalMs ?? 5_000));
     }
   }
 
@@ -102,13 +114,22 @@ export class Keeper {
     return out;
   }
 
-  async tick(): Promise<void> {
+  /** One keeper pass; safe to call from a cron. Returns a small summary. */
+  async tick(): Promise<{ bets: number; pending: number; active: number }> {
+    // reward destination must exist before the first fill/settle crank
+    if (!this.ataChecked) {
+      await this.ensureCrankerAta();
+      this.ataChecked = true;
+    }
     const bets = await this.fetchBets();
     const nowMs = Date.now();
+    let pending = 0;
+    let active = 0;
 
     for (const { publicKey, account } of bets as { publicKey: PublicKey; account: BetAccount }[]) {
       const state = Object.keys(account.state)[0];
       if (state === "pending") {
+        pending++;
         const targetTs = Number(account.targetTsMs);
         const commitTs = Number(account.commitTsMs);
         if (nowMs > targetTs + 3_600_000) {
@@ -117,9 +138,11 @@ export class Keeper {
           await this.tryFill(publicKey, account, commitTs, targetTs);
         }
       } else if (state === "active") {
+        active++;
         await this.trySettle(publicKey, account);
       }
     }
+    return { bets: bets.length, pending, active };
   }
 
   /** Pick the commit print (latest <= commit_ts) and target print (earliest >= target_ts). */
@@ -148,7 +171,7 @@ export class Keeper {
   /** Surfnet mode: copy the current mainnet root account into the fork
    * (surfpool caches cloned accounts while mainnet roots mutate every 5 min). */
   private async refreshRoot(root: PublicKey): Promise<void> {
-    if (!env.surfnetMode) return;
+    if (!this.opts.surfnetMode) return;
     const info = await this.mainnet.getAccountInfo(root);
     if (!info) return;
     await fetch(this.client.connection.rpcEndpoint, {
