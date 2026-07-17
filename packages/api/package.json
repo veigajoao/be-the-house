@@ -18,5 +18,9 @@
   },
   "devDependencies": {
     "tsx": "^4.19.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./keeper": "./src/keeper.ts"
   }
 }

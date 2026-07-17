@@ -14,7 +14,7 @@ import {
   type Quotes,
 } from "../lib/types";
 
-const API = process.env.NEXT_PUBLIC_API_URL!;
+const API = "/api"; // same-origin route handlers (Vercel-ready, no CORS)
 
 interface Pick {
   fixture: FixtureRow;

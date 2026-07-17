@@ -13,7 +13,11 @@ const app = await buildServer(client, txline);
 await app.listen({ port: env.port, host: "0.0.0.0" });
 console.log(`[api] listening on :${env.port}, rpc ${env.rpcUrl}`);
 
-const keeper = new Keeper(client, txline);
+const keeper = new Keeper(client, txline, {
+  surfnetMode: env.surfnetMode,
+  mainnetRpcUrl: env.mainnetRpcUrl,
+  intervalMs: env.keeperIntervalMs,
+});
 void keeper.run();
 
 process.on("SIGINT", () => {

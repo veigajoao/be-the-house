@@ -5,7 +5,8 @@ import { BN } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 import { USDC_MINT } from "@bethehouse/sdk";
-import { API_URL, chain } from "../../../lib/server";
+import { chain } from "../../../lib/server";
+import { getFixtures, getQuotes } from "../../../lib/market";
 
 export async function POST(req: NextRequest) {
   const { fixtureId, outcome, stakeUsdc } = (await req.json()) as {
@@ -16,17 +17,13 @@ export async function POST(req: NextRequest) {
   const { client } = chain();
 
   // fixture kickoff + best-house routing from the API
-  const [fixtures, quotesRes] = await Promise.all([
-    fetch(`${API_URL}/fixtures`).then((r) => r.json() as Promise<any[]>),
-    fetch(`${API_URL}/quotes/${fixtureId}`),
+  const [fixtures, quotes] = await Promise.all([
+    getFixtures(),
+    getQuotes(fixtureId),
   ]);
   const fixture = fixtures.find((f) => f.FixtureId === fixtureId);
   if (!fixture) return NextResponse.json({ error: "unknown fixture" }, { status: 404 });
-  if (!quotesRes.ok) return NextResponse.json({ error: "no live quotes" }, { status: 409 });
-  const quotes = (await quotesRes.json()) as {
-    quotes: { house: string }[];
-    best: string[][];
-  };
+  if (!quotes) return NextResponse.json({ error: "no live quotes" }, { status: 409 });
 
   const bettor = client.signer.publicKey;
   const bettorToken = getAssociatedTokenAddressSync(USDC_MINT, bettor);
