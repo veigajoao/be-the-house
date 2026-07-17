@@ -133,11 +133,8 @@ for (const [id, name, spread] of [
 }
 
 log("");
-log("=== DONE — run the stack with: ===");
-log(`RPC_URL=${rpcUrl} SURFNET_MODE=false TXLINE_ENV=development \\`);
-log(`TXORACLE_PROGRAM=${DEVNET_TXORACLE} USDC_MINT=${DEVNET_USDC} \\`);
-log("npx tsx packages/api/src/index.ts");
-log("");
-log("frontend: cd packages/app && \\");
-log(`RPC_URL=${rpcUrl} TXORACLE_PROGRAM=${DEVNET_TXORACLE} USDC_MINT=${DEVNET_USDC} \\`);
-log("NEXT_PUBLIC_API_URL=http://127.0.0.1:8787 pnpm dev");
+log("=== DONE — run the app (UI + API + cron keeper route) with: ===");
+log("cd packages/app && \\");
+log(`RPC_URL=${rpcUrl} TXLINE_ENV=development SURFNET_MODE=false \\`);
+log(`TXORACLE_PROGRAM=${DEVNET_TXORACLE} USDC_MINT=${DEVNET_USDC} pnpm dev`);
+log("keeper: schedule GET /api/cron/keeper (Vercel Cron in prod; curl loop locally)");

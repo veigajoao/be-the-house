@@ -5,7 +5,6 @@
 // target print's 5-min batch root publishes (~0.5-5.5 min).
 //
 // Usage: npx tsx scripts/live-e2e.ts [fixtureId]
-import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { config as dotenv } from "dotenv";
 import * as anchorNs from "@coral-xyz/anchor";
@@ -103,20 +102,16 @@ await houseOwner.program.methods
   .rpc();
 log("protocol + house + frontend ready");
 
-// -- keeper/api as a child process against the surfnet --
-const api = spawn("npx", ["tsx", "packages/api/src/index.ts"], {
-  cwd: ROOT,
-  env: {
-    ...process.env,
-    RPC_URL: surfnet.rpcUrl,
-    SURFNET_MODE: "true",
-    API_PORT: "8788",
-    KEEPER_INTERVAL_MS: "5000",
-  },
-  stdio: ["ignore", "pipe", "pipe"],
-});
-api.stdout.on("data", (d) => process.stdout.write(d));
-api.stderr.on("data", (d) => process.stderr.write(d));
+// -- keeper, in-process against the surfnet --
+const { BthClient, Keeper } = await import("../packages/sdk/src/index.js");
+const { loadKeypair, adminKeypairPath } = await import("../tests/harness/surfpool.js");
+const { IDL } = await import("../tests/harness/setup.js");
+const keeper = new Keeper(
+  new BthClient(surfnet.connection, IDL, loadKeypair(adminKeypairPath())),
+  txline,
+  { surfnetMode: true, mainnetRpcUrl: process.env.MAINNET_RPC_URL, intervalMs: 5_000 },
+);
+void keeper.run();
 
 // -- commit whenever a fresh print lands (max 12 attempts), watch for a fill --
 let nonce = BigInt(Math.floor(Math.random() * 1_000_000));
@@ -160,14 +155,14 @@ for (;;) {
     log(`   fill odds ${(a.fillOdds / 1000).toFixed(3)} (x1000: ${a.fillOdds})`);
     log(`   payout ${a.payout.toNumber() / 1e6} USDC, fill print ts ${new Date(a.fillTsMs.toNumber()).toISOString()}`);
     log(`   bettor balance: ${Number(await usdcBalance(surfnet, bettor.usdc)) / 1e6} USDC`);
-    api.kill();
+    keeper.stop();
     await surfnet.stop();
     process.exit(0);
   }
 
   if (Date.now() - startedAt > DEADLINE_MS) {
     log(`deadline reached without a fill (${commits} commits attempted) — exiting`);
-    api.kill();
+    keeper.stop();
     await surfnet.stop();
     process.exit(1);
   }

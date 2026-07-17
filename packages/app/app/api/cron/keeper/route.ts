@@ -6,7 +6,7 @@
 // across invocations on a warm serverless instance; a cold start simply
 // rebuilds it (and may create a fresh lookup table — pennies of rent).
 import { NextRequest, NextResponse } from "next/server";
-import { Keeper } from "@bethehouse/api/keeper";
+import { Keeper } from "@bethehouse/sdk";
 import { chain, txline } from "../../../../lib/server";
 
 export const maxDuration = 60; // Vercel function limit for one tick

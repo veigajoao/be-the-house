@@ -22,7 +22,7 @@ cp .env.example .env   # fill TXLINE_API_TOKEN / TXLINE_JWT
 ## 1. The interactive live demo (frontend-driven)
 
 **Terminal A — the whole stack** (surfnet fork + program deploy + protocol init
-+ two houses (sharp 80bps / wide 300bps) + API + keeper):
++ two houses (sharp 80bps / wide 300bps) + in-process keeper):
 
 ```bash
 DEMO_AUTOBET=0 npx tsx scripts/demo.ts <fixtureId>
@@ -30,13 +30,13 @@ DEMO_AUTOBET=0 npx tsx scripts/demo.ts <fixtureId>
 
 - `DEMO_AUTOBET=0` keeps the script from placing its own bets — you drive it
   from the UI. Drop the flag if you want it to auto-bet on fresh prints.
-- Ports: surfnet RPC `19199`, API `8789`.
+- Surfnet RPC: `19199`. (No separate API process — the app serves its own.)
 
-**Terminal B — the coupon frontend:**
+**Terminal B — the coupon frontend (serves the API routes too):**
 
 ```bash
 cd packages/app
-RPC_URL=http://127.0.0.1:19199 NEXT_PUBLIC_API_URL=http://127.0.0.1:8789 pnpm dev
+RPC_URL=http://127.0.0.1:19199 SURFNET_MODE=true pnpm dev
 ```
 
 Open **http://localhost:3123**, then:
