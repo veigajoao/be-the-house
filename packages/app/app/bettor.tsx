@@ -195,6 +195,7 @@ export default function Bettor({
   const [stake, setStake] = useState("50");
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  const [maxStake, setMaxStake] = useState<number | null>(null);
   // "ready" = at least one fetch has completed, so empty means empty (not loading)
   const [fixturesReady, setFixturesReady] = useState(false);
   const [betsReady, setBetsReady] = useState(false);
@@ -269,6 +270,7 @@ export default function Bettor({
     }
     setPlacing(true);
     setError("");
+    setMaxStake(null);
     try {
       // 1. server builds the unsigned commit tx (routes to a house that can fill)
       const res = await fetch("/api/bet", {
@@ -282,7 +284,10 @@ export default function Bettor({
         }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "commit failed");
+      if (!res.ok) {
+        if (body.maxStakeUsdc) setMaxStake(body.maxStakeUsdc);
+        throw new Error(body.error ?? "commit failed");
+      }
       // 2. the connected wallet signs & sends it (mobile → redirects to the app)
       await wallet.sign(body.tx);
       ceilings.set(body.bet, {
@@ -483,6 +488,22 @@ export default function Bettor({
             {error && (
               <div className="annot" style={{ marginTop: 10 }}>
                 {error}
+                {maxStake != null && maxStake > 0 && (
+                  <>
+                    {" "}
+                    <button
+                      className="faucet"
+                      style={{ marginTop: 6 }}
+                      onClick={() => {
+                        setStake(String(maxStake));
+                        setError("");
+                        setMaxStake(null);
+                      }}
+                    >
+                      set stake to {maxStake}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
