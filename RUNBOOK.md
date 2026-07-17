@@ -145,3 +145,20 @@ params): `staleness_window_ms` 120s → **2h**, `fill_tolerance_ms` 90s →
 and the next burst (target side); worst case ~50 min to fill, inside the 1h
 refund expiry. Mainnet/surfnet keep the spec-tight 120s/90s. The UI quotes
 from prints up to 2h old and labels their age.
+
+## Wallet connect (real user wallets)
+
+Bets are signed by the user's own wallet (Phantom/Solflare), ported from
+bolao-copa's `@solana/react-hooks` pattern. The demo keypair is now only the
+server's role (keeper cranks + faucet mint authority + unsigned-tx builder).
+
+Flow: **Connect wallet** (masthead) → **faucet** mints 1000 test USDC *and*
+tops up 0.05 devnet SOL (fees + bet-account rent) to the connected wallet →
+tick an outcome → **Place bet**: the server builds an unsigned `commit_bet`
+tx (routing to a house that can fill, via simulation), the wallet signs & sends
+it (mobile → redirects to the wallet app). "My bets" filters by the connected
+address (`getProgramAccounts` memcmp on `Bet.bettor`).
+
+Client env for the wallet provider: `NEXT_PUBLIC_RPC_URL`,
+`NEXT_PUBLIC_USDC_MINT` (dev command sets both). Mobile deep-linking needs no
+config — Phantom/Solflare register Wallet-Standard wallets that redirect.
