@@ -7,13 +7,8 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import type { AddressLookupTableAccount } from "@solana/web3.js";
-import {
-  BthClient,
-  oddsRootPda,
-  scoresRootPda,
-  USDC_MINT,
-  type BetAccount,
-} from "@bethehouse/sdk";
+import { BthClient, type BetAccount } from "./client.js";
+import { oddsRootPda, scoresRootPda, USDC_MINT } from "./pdas.js";
 import {
   MARKET_1X2,
   STABLE_PRICE_BOOKMAKER_ID,

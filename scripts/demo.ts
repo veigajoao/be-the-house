@@ -4,7 +4,6 @@
 //
 // Runs on a fresh surfpool mainnet fork with REAL live TxLINE data:
 //   npx tsx scripts/demo.ts [fixtureId]
-import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { config as dotenv } from "dotenv";
 import * as anchorNs from "@coral-xyz/anchor";
@@ -74,26 +73,25 @@ async function makeHouse(owner: typeof sharpOwner, name: string, spreadBps: numb
 const sharp = await makeHouse(sharpOwner, "sharp", 80); // 0.8% spread
 const wide = await makeHouse(wideOwner, "wide", 300); // 3% spread
 
-// ---- API + keeper ----
-const api = spawn("npx", ["tsx", "packages/api/src/index.ts"], {
-  cwd: ROOT,
-  env: { ...process.env, RPC_URL: surfnet.rpcUrl, SURFNET_MODE: "true", API_PORT: "8789", KEEPER_INTERVAL_MS: "5000" },
-  stdio: ["ignore", "pipe", "pipe"],
-});
-api.stdout.on("data", (d) => process.stdout.write(d));
-api.stderr.on("data", (d) => process.stderr.write(d));
-await new Promise((r) => setTimeout(r, 3_000));
+// ---- keeper, in-process (no separate API service) ----
+const { BthClient, Keeper } = await import("../packages/sdk/src/index.js");
+const { loadKeypair, adminKeypairPath } = await import("../tests/harness/surfpool.js");
+const { IDL } = await import("../tests/harness/setup.js");
+const keeper = new Keeper(
+  new BthClient(surfnet.connection, IDL, loadKeypair(adminKeypairPath())),
+  txline,
+  { surfnetMode: true, mainnetRpcUrl: process.env.MAINNET_RPC_URL, intervalMs: 5_000 },
+);
+void keeper.run();
 
-// ---- quotes: the SDK/API view the bettor sees ----
-const quotesRes = await fetch(`http://127.0.0.1:8789/quotes/${fixtureId}`);
-if (quotesRes.ok) {
-  const q = (await quotesRes.json()) as any;
-  log(`StablePrice print ts=${new Date(q.print.ts).toISOString()} prices [${q.print.prices.map(fmt).join(", ")}]`);
-  for (const h of q.quotes) {
-    log(`  quote ${h.house.slice(0, 8)}… spread ${h.spreadBps}bps -> up to [${h.effOdds.map(fmt).join(", ")}]`);
-  }
-} else {
-  log("no live quotes yet (StablePrice not quoting this fixture right now)");
+// ---- the price the bettor would see ----
+{
+  const snap = await txline.oddsSnapshot(fixtureId);
+  const print = snap.find(
+    (r) => r.SuperOddsType === MARKET_1X2 && r.BookmakerId === STABLE_PRICE_BOOKMAKER_ID && !r.MarketPeriod && !r.InRunning,
+  );
+  if (print) log(`StablePrice print ts=${new Date(print.Ts).toISOString()} prices [${print.Prices.map(fmt).join(", ")}]`);
+  else log("no live StablePrice print for this fixture right now");
 }
 
 // ---- commit on fresh prints via the BEST house (auto = sharp) ----
@@ -127,13 +125,13 @@ for (;;) {
   if (settled) {
     const a = settled.account;
     log(`🏁 SETTLED: ${a.state.won ? "WON" : "LOST"} — bettor balance ${Number(await usdcBalance(surfnet, bettor.usdc)) / 1e6} USDC`);
-    api.kill();
+    keeper.stop();
     await surfnet.stop();
     process.exit(0);
   }
   if (AUTOBET && Date.now() - startedAt > DEADLINE_MS && !active) {
     log("deadline without a fill — exiting (expired commits refund automatically)");
-    api.kill();
+    keeper.stop();
     await surfnet.stop();
     process.exit(1);
   }
