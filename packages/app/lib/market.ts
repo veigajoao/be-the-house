@@ -36,6 +36,48 @@ export interface QuotesView {
   best: string[][];
 }
 
+export interface HouseFiltersView {
+  competitionAllow: boolean;
+  competitions: number[];
+  fixtureAllow: boolean;
+  fixtures: string[];
+}
+
+/** Fetch a house's published offer policy (null = no policy = offer all). */
+export async function getHouseFilters(housePda: import("@solana/web3.js").PublicKey) {
+  const { client } = chain();
+  try {
+    const f = await (client.program.account as any).houseFilters.fetch(
+      client.pdas.houseFilters(housePda),
+    );
+    return {
+      competitionAllow: f.competitionAllow as boolean,
+      competitions: (f.competitions as number[]).map(Number),
+      fixtureAllow: f.fixtureAllow as boolean,
+      fixtures: (f.fixtures as any[]).map((x) => x.toString()),
+    } satisfies HouseFiltersView;
+  } catch {
+    return null;
+  }
+}
+
+/** The router-side offer check (mirrors HouseFilters::fixture_offered +
+ * the competition rule the program can't verify on-chain). */
+export function offersFixture(
+  filters: HouseFiltersView | null,
+  fixtureId: number,
+  competitionId: number | undefined,
+): boolean {
+  if (!filters) return true;
+  const fxListed = filters.fixtures.includes(String(fixtureId));
+  if (filters.fixtureAllow ? !fxListed : fxListed) return false;
+  if (competitionId !== undefined) {
+    const compListed = filters.competitions.includes(competitionId);
+    if (filters.competitionAllow ? !compListed : compListed) return false;
+  }
+  return true;
+}
+
 /** Pre-match quoting is bursty; during a lull the snapshot endpoint drops the
  * market entirely. Fall back to the last print in the updates cache (up to
  * this age) so the coupon keeps quoting — the UI shows the price's age, and a
@@ -64,9 +106,12 @@ export async function getQuotes(fixtureId: number): Promise<QuotesView | null> {
 
   const { client } = chain();
   const houses = await (client.program.account as any).house.all();
+  const competitionId = (await getFixtures()).find((f) => f.FixtureId === fixtureId)?.CompetitionId;
   const quotes: QuotesView["quotes"] = [];
   for (const { publicKey, account } of houses) {
     if (account.paused) continue;
+    // honor the house's published offer policy (competition + fixture rules)
+    if (!offersFixture(await getHouseFilters(publicKey), fixtureId, competitionId)) continue;
     let liability: [bigint, bigint, bigint] = [0n, 0n, 0n];
     try {
       const exp = await (client.program.account as any).fixtureExposure.fetch(

@@ -153,7 +153,7 @@ export default function App() {
         <Bettor config={config} wallet={wallet} />
       </div>
       <div hidden={tab !== "house"}>
-        <House />
+        <House wallet={wallet} />
       </div>
 
       <WalletPicker wallet={wallet} />

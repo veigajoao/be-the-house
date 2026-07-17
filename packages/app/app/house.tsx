@@ -1,101 +1,481 @@
 "use client";
-// House surface: vault three-way split, per-fixture exposure bars, settings.
-// Exposes the machinery — the LP wants to see exactly what they're exposed to.
-import { useCallback, useEffect, useState } from "react";
-import { fmtUsdc, type HouseView } from "../lib/types";
+// House surface, split two ways:
+//   My House — the house owned by YOUR connected wallet (one per wallet):
+//     create / fund / configure params / set offer policy (competition &
+//     match allow-or-deny) / pause / withdraw. All wallet-signed.
+//   All Houses — read-only aggregate: every house's spread, vault, exposure
+//     and published offer policy.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtOdds, fmtUsdc, type FixtureRow, type HouseView } from "../lib/types";
+import type { useBthWallet } from "../lib/wallet";
 
-function VaultPanel({ h, onAction }: { h: HouseView; onAction: () => void }) {
-  const [amount, setAmount] = useState("100");
+type Wallet = ReturnType<typeof useBthWallet>;
+type FilterMode = "all" | "only" | "except";
+
+const DEFAULT_PARAMS = {
+  spreadBps: 150,
+  skewCoeffBps: 2000,
+  oddsCap: 15000,
+  maxRiskPerFixtureUsdc: 5000,
+  maxTotalRiskUsdc: 10000,
+};
+
+/** (allow, list) ← UI mode + selection */
+function modeToRule(mode: FilterMode, selected: (string | number)[]) {
+  if (mode === "all") return { allow: false, list: [] as (string | number)[] };
+  if (mode === "only") return { allow: true, list: selected };
+  return { allow: false, list: selected };
+}
+/** UI mode ← on-chain (allow, listLength) */
+function ruleToMode(allow: boolean, listLen: number): FilterMode {
+  if (listLen === 0) return "all";
+  return allow ? "only" : "except";
+}
+
+export default function House({ wallet }: { wallet: Wallet }) {
+  const [view, setView] = useState<"mine" | "all">("mine");
+  const [houses, setHouses] = useState<HouseView[]>([]);
+  const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const total = Math.max(h.vault, 1);
-  const pct = (n: number) => `${Math.max(0, (n / total) * 100)}%`;
+  const [msg, setMsg] = useState("");
+  const owner = wallet.address;
 
-  async function act(action: string, extra: Record<string, unknown> = {}) {
+  const poll = useCallback(async () => {
+    try {
+      const [h, fx] = await Promise.all([
+        fetch("/api/houses").then((r) => r.json()) as Promise<HouseView[]>,
+        fetch("/api/fixtures").then((r) => r.json()) as Promise<FixtureRow[]>,
+      ]);
+      setHouses(h);
+      setFixtures(fx);
+    } catch {
+      /* chain down */
+    }
+  }, []);
+
+  useEffect(() => {
+    void poll();
+    const t = setInterval(poll, 8_000);
+    return () => clearInterval(t);
+  }, [poll]);
+
+  const myHouse = owner ? houses.find((h) => h.owner === owner) ?? null : null;
+
+  /** Build (server) → wallet-sign → refresh. */
+  async function act(action: string, extra: Record<string, unknown>) {
+    if (!owner) {
+      wallet.connect();
+      return;
+    }
     setBusy(true);
-    await fetch("/api/house", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action, house: h.pda, amountUsdc: Number(amount), ...extra }),
-    });
-    setBusy(false);
-    onAction();
+    setMsg("");
+    try {
+      const res = await fetch("/api/house", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, owner, ...extra }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "failed");
+      await wallet.sign(body.tx);
+      setMsg("✓ saved");
+      setTimeout(poll, 1200);
+    } catch (e) {
+      setMsg((e as Error).message.slice(0, 160));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div className="panel">
-      <div className="vault">
-        <div className="vault-lab">
-          House #{h.houseId} vault {h.paused && "· PAUSED"}
-        </div>
-        <div className="vault-total">
-          {fmtUsdc(h.vault)} <span style={{ fontSize: 14, color: "var(--ink-2)" }}>USDC</span>
-        </div>
-      </div>
-      <div
-        className="bar"
-        role="img"
-        aria-label={`Free ${fmtUsdc(h.free)}, reserved ${fmtUsdc(h.reserved)}, locked ${fmtUsdc(h.locked)}`}
-      >
-        <i className="free" style={{ flex: `0 0 ${pct(h.free)}` }} />
-        <i className="res" style={{ flex: `0 0 ${pct(h.reserved)}` }} />
-        <i className="lock" style={{ flex: 1 }} />
-      </div>
-      <div className="key">
-        <div className="key-row">
-          <i className="sw free" />
-          <em>Free — withdrawable now</em>
-          <b>{fmtUsdc(h.free)}</b>
-        </div>
-        <div className="key-row">
-          <i className="sw res" />
-          <em>Reserved — pending commits, held at odds cap</em>
-          <b>{fmtUsdc(h.reserved)}</b>
-        </div>
-        <div className="key-row">
-          <i className="sw lock" />
-          <em>Locked — filled bets, netted</em>
-          <b>{fmtUsdc(h.locked)}</b>
-        </div>
-      </div>
-      <div className="inv">
-        vault ≥ locked, always. Every payout is pre-funded — this house cannot go insolvent.
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 14, alignItems: "center" }}>
-        <div className="field" style={{ marginBottom: 0, flex: 1 }}>
-          <span>USDC</span>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Amount" />
-        </div>
-        <button className="faucet" disabled={busy} onClick={() => act("deposit")}>
-          Deposit
+    <>
+      <div className="tabs" role="tablist" style={{ marginBottom: 24 }}>
+        <button className="tab" aria-selected={view === "mine"} onClick={() => setView("mine")}>
+          My House
         </button>
-        <button className="faucet" disabled={busy} onClick={() => act("withdraw")}>
-          Withdraw
-        </button>
-        <button
-          className="faucet"
-          disabled={busy}
-          onClick={() => act("setPaused", { paused: !h.paused })}
-        >
-          {h.paused ? "Unpause" : "Pause"}
+        <button className="tab" aria-selected={view === "all"} onClick={() => setView("all")}>
+          All Houses ({houses.length})
         </button>
       </div>
+
+      {view === "mine" ? (
+        !owner ? (
+          <div className="empty">
+            Connect a wallet to run a house.{" "}
+            <button className="faucet" style={{ marginLeft: 8 }} onClick={() => wallet.connect()}>
+              connect wallet
+            </button>
+          </div>
+        ) : myHouse ? (
+          <MyHouse
+            house={myHouse}
+            fixtures={fixtures}
+            busy={busy || wallet.busy}
+            msg={msg}
+            act={act}
+          />
+        ) : (
+          <CreateHouse busy={busy || wallet.busy} msg={msg} act={act} />
+        )
+      ) : (
+        <AllHouses houses={houses} fixtures={fixtures} myOwner={owner} />
+      )}
+    </>
+  );
+}
+
+// ---------- create ----------
+function CreateHouse({
+  busy,
+  msg,
+  act,
+}: {
+  busy: boolean;
+  msg: string;
+  act: (a: string, e: Record<string, unknown>) => void;
+}) {
+  const [deposit, setDeposit] = useState("10000");
+  const [p, setP] = useState(DEFAULT_PARAMS);
+  return (
+    <section className="sec">
+      <p className="eyebrow">Create your house</p>
+      <div className="grid2">
+        <div className="panel form">
+          <ParamSliders p={p} setP={setP} />
+        </div>
+        <div className="panel form">
+          <label>
+            <span className="lab">
+              Initial deposit <b>{deposit} USDC</b>
+            </span>
+            <input type="text" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
+          </label>
+          <div className="readout">
+            You&apos;re the sole owner — only you can withdraw. The protocol pre-funds every payout
+            from this vault (vault ≥ locked, always), so your house can never go insolvent.
+          </div>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              act("create", { params: p, amountUsdc: Number(deposit) })
+            }
+            style={{ marginTop: 14 }}
+          >
+            {busy ? "approve in wallet…" : "Create house + deposit"}
+          </button>
+          {msg && <div className="annot" style={{ marginTop: 10 }}>{msg}</div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- my house ----------
+function MyHouse({
+  house,
+  fixtures,
+  busy,
+  msg,
+  act,
+}: {
+  house: HouseView;
+  fixtures: FixtureRow[];
+  busy: boolean;
+  msg: string;
+  act: (a: string, e: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="grid2">
+      <div>
+        <VaultPanel house={house} busy={busy} act={act} />
+        <FiltersPanel house={house} fixtures={fixtures} busy={busy} act={act} />
+        <ExposurePanel house={house} fixtures={fixtures} />
+      </div>
+      <SettingsPanel house={house} busy={busy} msg={msg} act={act} />
     </div>
   );
 }
 
-function ExposurePanel({ h }: { h: HouseView }) {
-  const open = h.exposures.filter((e) => e.openBets > 0 || e.locked > 0);
-  if (!open.length)
-    return <div className="empty">No open exposure. Commits will create it lazily.</div>;
+function VaultPanel({
+  house,
+  busy,
+  act,
+}: {
+  house: HouseView;
+  busy: boolean;
+  act: (a: string, e: Record<string, unknown>) => void;
+}) {
+  const [amount, setAmount] = useState("1000");
+  const total = Math.max(house.vault, 1);
+  const pct = (n: number) => `${Math.max(0, (n / total) * 100)}%`;
+  return (
+    <section className="sec">
+      <p className="eyebrow">Vault{house.paused && " · PAUSED"}</p>
+      <div className="panel">
+        <div className="vault">
+          <div className="vault-lab">Total deposited</div>
+          <div className="vault-total">
+            {fmtUsdc(house.vault)} <span style={{ fontSize: 14, color: "var(--ink-2)" }}>USDC</span>
+          </div>
+        </div>
+        <div className="bar" role="img">
+          <i className="free" style={{ flex: `0 0 ${pct(house.free)}` }} />
+          <i className="res" style={{ flex: `0 0 ${pct(house.reserved)}` }} />
+          <i className="lock" style={{ flex: 1 }} />
+        </div>
+        <div className="key">
+          <div className="key-row">
+            <i className="sw free" /> <em>Free — withdrawable now</em> <b>{fmtUsdc(house.free)}</b>
+          </div>
+          <div className="key-row">
+            <i className="sw res" /> <em>Reserved — pending commits, at odds cap</em>{" "}
+            <b>{fmtUsdc(house.reserved)}</b>
+          </div>
+          <div className="key-row">
+            <i className="sw lock" /> <em>Locked — filled bets, netted</em>{" "}
+            <b>{fmtUsdc(house.locked)}</b>
+          </div>
+        </div>
+        <div className="inv">
+          vault ≥ locked, always. Every payout is pre-funded — this house cannot go insolvent.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14, alignItems: "center" }}>
+          <div className="field" style={{ marginBottom: 0, flex: 1 }}>
+            <span>USDC</span>
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <button className="faucet" disabled={busy} onClick={() => act("deposit", { amountUsdc: Number(amount) })}>
+            Deposit
+          </button>
+          <button className="faucet" disabled={busy} onClick={() => act("withdraw", { amountUsdc: Number(amount) })}>
+            Withdraw
+          </button>
+          <button className="faucet" disabled={busy} onClick={() => act("setPaused", { paused: !house.paused })}>
+            {house.paused ? "Unpause" : "Pause"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FiltersPanel({
+  house,
+  fixtures,
+  busy,
+  act,
+}: {
+  house: HouseView;
+  fixtures: FixtureRow[];
+  busy: boolean;
+  act: (a: string, e: Record<string, unknown>) => void;
+}) {
+  const competitions = useMemo(() => {
+    const m = new Map<number, string>();
+    fixtures.forEach((f) => m.set(f.CompetitionId, f.Competition));
+    return [...m.entries()].map(([id, name]) => ({ id, name }));
+  }, [fixtures]);
+
+  const [compMode, setCompMode] = useState<FilterMode>(
+    ruleToMode(house.filters?.competitionAllow ?? false, house.filters?.competitions.length ?? 0),
+  );
+  const [comps, setComps] = useState<number[]>(house.filters?.competitions ?? []);
+  const [fxMode, setFxMode] = useState<FilterMode>(
+    ruleToMode(house.filters?.fixtureAllow ?? false, house.filters?.fixtures.length ?? 0),
+  );
+  const [fxs, setFxs] = useState<string[]>(house.filters?.fixtures ?? []);
+
+  const toggle = <T,>(arr: T[], v: T, set: (a: T[]) => void) =>
+    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  function save() {
+    const comp = modeToRule(compMode, comps);
+    const fx = modeToRule(fxMode, fxs);
+    act("setFilters", {
+      filters: {
+        competitionAllow: comp.allow,
+        competitions: comp.list as number[],
+        fixtureAllow: fx.allow,
+        fixtures: fx.list as string[],
+      },
+    });
+  }
+
+  return (
+    <section className="sec">
+      <p className="eyebrow">Offer policy</p>
+      <div className="panel form">
+        <div className="readout" style={{ marginBottom: 12 }}>
+          Choose which markets your house quotes. The <b>match</b> rule is enforced on-chain at
+          commit; the <b>competition</b> rule is applied by routing. Default (offer all) leaves both
+          open.
+        </div>
+
+        <label>
+          <span className="lab">Competitions</span>
+          <ModeSelect mode={compMode} onChange={setCompMode} />
+        </label>
+        {compMode !== "all" && (
+          <div className="filter-chips">
+            {competitions.map((c) => (
+              <button
+                key={c.id}
+                className={`chip ${comps.includes(c.id) ? "on" : ""}`}
+                onClick={() => toggle(comps, c.id, setComps)}
+              >
+                {c.name}
+              </button>
+            ))}
+            {competitions.length === 0 && <span className="annot">no competitions in the feed yet</span>}
+          </div>
+        )}
+
+        <label style={{ marginTop: 16 }}>
+          <span className="lab">Individual matches</span>
+          <ModeSelect mode={fxMode} onChange={setFxMode} />
+        </label>
+        {fxMode !== "all" && (
+          <div className="filter-chips">
+            {fixtures.map((f) => (
+              <button
+                key={f.FixtureId}
+                className={`chip ${fxs.includes(String(f.FixtureId)) ? "on" : ""}`}
+                onClick={() => toggle(fxs, String(f.FixtureId), setFxs)}
+              >
+                {f.Participant1} — {f.Participant2}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button className="btn" disabled={busy} onClick={save} style={{ marginTop: 16 }}>
+          {busy ? "approve in wallet…" : "Save offer policy"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ModeSelect({ mode, onChange }: { mode: FilterMode; onChange: (m: FilterMode) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      {(["all", "only", "except"] as const).map((m) => (
+        <button
+          key={m}
+          className={`chip ${mode === m ? "on" : ""}`}
+          onClick={() => onChange(m)}
+        >
+          {m === "all" ? "Offer all" : m === "only" ? "Only selected" : "All except"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SettingsPanel({
+  house,
+  busy,
+  msg,
+  act,
+}: {
+  house: HouseView;
+  busy: boolean;
+  msg: string;
+  act: (a: string, e: Record<string, unknown>) => void;
+}) {
+  const [p, setP] = useState({
+    spreadBps: house.spreadBps,
+    skewCoeffBps: house.skewCoeffBps,
+    oddsCap: house.oddsCap,
+    maxRiskPerFixtureUsdc: house.maxRiskPerFixture / 1e6,
+    maxTotalRiskUsdc: house.maxTotalRisk / 1e6,
+  });
+  return (
+    <section className="sec">
+      <p className="eyebrow">Parameters</p>
+      <div className="panel form">
+        <ParamSliders p={p} setP={setP} />
+        <button className="btn" disabled={busy} onClick={() => act("updateParams", { params: p })}>
+          {busy ? "approve in wallet…" : "Save parameters"}
+        </button>
+        {msg && <div className="annot" style={{ marginTop: 10 }}>{msg}</div>}
+        <p className="annot" style={{ marginTop: 12 }}>
+          Params apply to future fills only. Tighter spread wins more routed flow; odds cap reserves
+          ${(p.oddsCap / 1000).toFixed(2)} per $1 staked until a bet fills.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ParamSliders({
+  p,
+  setP,
+}: {
+  p: typeof DEFAULT_PARAMS;
+  setP: (p: typeof DEFAULT_PARAMS) => void;
+}) {
+  const set = (k: keyof typeof DEFAULT_PARAMS, v: number) => setP({ ...p, [k]: v });
   return (
     <>
+      <label>
+        <span className="lab">
+          Spread <b>{p.spreadBps} bps</b>
+        </span>
+        <input type="range" min={20} max={600} step={10} value={p.spreadBps}
+          onChange={(e) => set("spreadBps", Number(e.target.value))} />
+      </label>
+      <label>
+        <span className="lab">
+          Skew coefficient <b>{p.skewCoeffBps} bps</b>
+        </span>
+        <input type="range" min={0} max={10000} step={100} value={p.skewCoeffBps}
+          onChange={(e) => set("skewCoeffBps", Number(e.target.value))} />
+      </label>
+      <label>
+        <span className="lab">
+          Odds cap <b>{(p.oddsCap / 1000).toFixed(1)}×</b>
+        </span>
+        <input type="range" min={2000} max={25000} step={500} value={p.oddsCap}
+          onChange={(e) => set("oddsCap", Number(e.target.value))} />
+        <div className="readout">Reserves ${(p.oddsCap / 1000).toFixed(2)} per $1 staked until fill.</div>
+      </label>
+      <label>
+        <span className="lab">
+          Max risk / fixture <b>{p.maxRiskPerFixtureUsdc}</b>
+        </span>
+        <input type="text" value={p.maxRiskPerFixtureUsdc}
+          onChange={(e) => set("maxRiskPerFixtureUsdc", Number(e.target.value) || 0)} />
+      </label>
+      <label>
+        <span className="lab">
+          Max total risk <b>{p.maxTotalRiskUsdc}</b>
+        </span>
+        <input type="text" value={p.maxTotalRiskUsdc}
+          onChange={(e) => set("maxTotalRiskUsdc", Number(e.target.value) || 0)} />
+      </label>
+    </>
+  );
+}
+
+function ExposurePanel({ house, fixtures }: { house: HouseView; fixtures: FixtureRow[] }) {
+  const open = house.exposures.filter((e) => e.openBets > 0 || e.locked > 0);
+  const name = (id: string) => {
+    const f = fixtures.find((f) => String(f.FixtureId) === id);
+    return f ? `${f.Participant1} — ${f.Participant2}` : `Fixture #${id}`;
+  };
+  if (!open.length) return null;
+  return (
+    <section className="sec">
+      <p className="eyebrow">Exposure</p>
       {open.map((e) => {
         const max = Math.max(...e.liability, 1);
         const maxIdx = e.liability.indexOf(Math.max(...e.liability));
         return (
           <div className="panel exp-block" key={e.fixtureId}>
             <div className="exp">
-              <div className="exp-fx">Fixture #{e.fixtureId}</div>
+              <div className="exp-fx">{name(e.fixtureId)}</div>
               {(["1 HOME", "X DRAW", "2 AWAY"] as const).map((lab, o) => (
                 <div className={`exp-row ${o === maxIdx ? "max" : ""}`} key={o}>
                   <span>{lab}</span>
@@ -106,210 +486,80 @@ function ExposurePanel({ h }: { h: HouseView }) {
                 </div>
               ))}
               <div className="exp-net">
-                worst case <b>{fmtUsdc(Math.max(...e.liability))}</b> − stakes collected{" "}
+                worst case <b>{fmtUsdc(Math.max(...e.liability))}</b> − stakes{" "}
                 <b>{fmtUsdc(e.stakesCollected)}</b> = locked <b>{fmtUsdc(e.locked)}</b>
-                <br />
-                Balance the book and this goes to zero. Skew widens the heavy side to get you
-                there.
               </div>
             </div>
           </div>
         );
       })}
-    </>
+    </section>
   );
 }
 
-function SettingsPanel({ h, onAction }: { h: HouseView | null; onAction: () => void }) {
-  const [spread, setSpread] = useState(h?.spreadBps ?? 200);
-  const [cap, setCap] = useState((h?.oddsCap ?? 15_000) / 1000);
-  const [skew, setSkew] = useState(h?.skewCoeffBps ?? 2_000);
-  const [perFixture, setPerFixture] = useState(String((h?.maxRiskPerFixture ?? 2_000_000_000) / 1e6));
-  const [total, setTotal] = useState(String((h?.maxTotalRisk ?? 4_000_000_000) / 1e6));
-  const [deposit, setDeposit] = useState("1000");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  async function save() {
-    setBusy(true);
-    setMsg("");
-    const params = {
-      spreadBps: spread,
-      skewCoeffBps: skew,
-      oddsCap: Math.round(cap * 1000),
-      maxRiskPerFixtureUsdc: Number(perFixture),
-      maxTotalRiskUsdc: Number(total),
-    };
-    const body = h
-      ? { action: "updateParams", house: h.pda, params }
-      : { action: "create", houseId: Math.floor(Math.random() * 60_000), params, amountUsdc: Number(deposit) };
-    const res = await fetch("/api/house", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const out = await res.json();
-    setMsg(res.ok ? (h ? "saved" : `created ${out.house?.slice(0, 8)}…`) : out.error);
-    setBusy(false);
-    onAction();
-  }
-
+// ---------- all houses (read-only) ----------
+function AllHouses({
+  houses,
+  fixtures,
+  myOwner,
+}: {
+  houses: HouseView[];
+  fixtures: FixtureRow[];
+  myOwner: string | null;
+}) {
+  const compName = (id: number) => fixtures.find((f) => f.CompetitionId === id)?.Competition ?? `#${id}`;
+  const policy = (h: HouseView) => {
+    if (!h.filters) return "offers all markets";
+    const parts: string[] = [];
+    if (h.filters.competitions.length)
+      parts.push(
+        `${h.filters.competitionAllow ? "only" : "excl"} ${h.filters.competitions.map(compName).join(", ")}`,
+      );
+    if (h.filters.fixtures.length)
+      parts.push(`${h.filters.fixtureAllow ? "only" : "excl"} ${h.filters.fixtures.length} match(es)`);
+    return parts.length ? parts.join(" · ") : "offers all markets";
+  };
   return (
-    <div className="panel form">
-      {!h && (
-        <label>
-          <span className="lab">
-            Deposit <b>{deposit}</b>
-          </span>
-          <input type="text" value={deposit} onChange={(e) => setDeposit(e.target.value)} aria-label="Deposit USDC" />
-        </label>
-      )}
-      <label>
-        <span className="lab">
-          Spread <b>{spread} bps</b>
-        </span>
-        <input
-          type="range"
-          min={50}
-          max={600}
-          step={10}
-          value={spread}
-          onChange={(e) => setSpread(Number(e.target.value))}
-        />
-        <div className="readout">
-          Your edge on every fill. Tighter spread wins more flow at thinner margin — you're
-          bidding against every other house.
-        </div>
-      </label>
-      <label>
-        <span className="lab">
-          Odds cap <b>{cap.toFixed(1)}×</b>
-        </span>
-        <input
-          type="range"
-          min={2}
-          max={25}
-          step={0.5}
-          value={cap}
-          onChange={(e) => setCap(Number(e.target.value))}
-        />
-        <div className="readout">
-          Reserves <b>${cap.toFixed(2)}</b> per $1 staked until the bet fills. Raise it to
-          quote long shots; lower it for capital efficiency.
-        </div>
-      </label>
-      <label>
-        <span className="lab">
-          Skew coefficient <b>{skew} bps</b>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={10_000}
-          step={100}
-          value={skew}
-          onChange={(e) => setSkew(Number(e.target.value))}
-        />
-        <div className="readout">
-          Widens the heavy side of your book as it fills, steering flow toward balance.
-        </div>
-      </label>
-      <label>
-        <span className="lab">
-          Max risk per fixture <b>{perFixture}</b>
-        </span>
-        <input type="text" value={perFixture} onChange={(e) => setPerFixture(e.target.value)} aria-label="Max risk per fixture" />
-      </label>
-      <label>
-        <span className="lab">
-          Max total risk <b>{total}</b>
-        </span>
-        <input type="text" value={total} onChange={(e) => setTotal(e.target.value)} aria-label="Max total risk" />
-      </label>
-      <button className="btn" disabled={busy} onClick={save}>
-        {h ? "Save settings" : "Create house"}
-      </button>
-      {msg && (
-        <div className="annot" style={{ marginTop: 10 }}>
-          {msg}
+    <section className="sec">
+      <p className="eyebrow">All houses</p>
+      {houses.length === 0 ? (
+        <div className="empty">No houses yet.</div>
+      ) : (
+        <div className="coupon">
+          <div className="coupon-head" style={{ gridTemplateColumns: "1fr 70px 90px 90px 90px" }}>
+            <div>House</div>
+            <div>Spread</div>
+            <div>Vault</div>
+            <div>Free</div>
+            <div>Locked</div>
+          </div>
+          {houses.map((h) => (
+            <div
+              className="fx"
+              key={h.pda}
+              style={{ gridTemplateColumns: "1fr 70px 90px 90px 90px" }}
+            >
+              <div className="fx-info">
+                <div className="fx-teams" style={{ fontSize: 14 }}>
+                  {h.owner === myOwner ? "★ Your house" : `House ${h.pda.slice(0, 6)}…`}
+                  {h.paused && <span style={{ color: "var(--stamp)" }}> · paused</span>}
+                </div>
+                <div className="fx-sub">
+                  {policy(h)} · odds cap {(h.oddsCap / 1000).toFixed(0)}× · skew {h.skewCoeffBps}bps
+                </div>
+              </div>
+              <div className="pick" style={{ pointerEvents: "none" }}>{h.spreadBps}bps</div>
+              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.vault)}</div>
+              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.free)}</div>
+              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.locked)}</div>
+            </div>
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-export default function House() {
-  const [houses, setHouses] = useState<HouseView[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  const poll = useCallback(async () => {
-    try {
-      const h = (await fetch("/api/houses").then((r) => r.json())) as HouseView[];
-      setHouses(h);
-      if (!selected && h.length) setSelected(h[0].pda);
-    } catch {
-      /* chain down */
-    }
-  }, [selected]);
-
-  useEffect(() => {
-    void poll();
-    const t = setInterval(poll, 5_000);
-    return () => clearInterval(t);
-  }, [poll]);
-
-  const h = houses.find((x) => x.pda === selected) ?? null;
-
-  return (
-    <div className="grid2">
-      <div>
-        <section className="sec">
-          <p className="eyebrow">
-            Vault
-            {houses.length > 1 && (
-              <select
-                value={selected ?? ""}
-                onChange={(e) => setSelected(e.target.value)}
-                style={{ fontFamily: "var(--mono)", fontSize: 11, marginLeft: 8 }}
-              >
-                {houses.map((x) => (
-                  <option key={x.pda} value={x.pda}>
-                    House #{x.houseId} ({x.pda.slice(0, 6)}…)
-                  </option>
-                ))}
-              </select>
-            )}
-          </p>
-          {h ? (
-            <VaultPanel h={h} onAction={poll} />
-          ) : (
-            <div className="empty">No houses yet — create one on the right.</div>
-          )}
-          <p className="annot">
-            Reserved is separate from locked on purpose. A commit reserves worst-case (stake ×
-            odds cap); the excess is released back at fill. Merge the two and the LP thinks
-            they're being drained.
-          </p>
-        </section>
-
-        <section className="sec">
-          <p className="eyebrow">Exposure</p>
-          {h && <ExposurePanel h={h} />}
-          <p className="annot">
-            Three bars, max highlighted. The tallest bar IS the exposure — everything else is
-            noise.
-          </p>
-        </section>
-      </div>
-
-      <section className="sec">
-        <p className="eyebrow">{h ? "House settings" : "Create house"}</p>
-        <SettingsPanel key={h?.pda ?? "new"} h={h} onAction={poll} />
-        <p className="annot">
-          Odds cap is a capital knob, not a nerd knob — so it reads out in dollars reserved per
-          dollar staked.
-        </p>
-      </section>
-    </div>
+      <p className="annot">
+        Houses compete on price — each bet routes to the best odds that can collateralize it. A
+        house&apos;s offer policy is published on-chain (the match rule is enforced at commit).
+      </p>
+    </section>
   );
 }

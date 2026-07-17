@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::BthError;
-use crate::state::{Config, House, ODDS_SCALE};
+use crate::state::{Config, House, HouseFilters, ODDS_SCALE};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
 pub struct HouseParams {
@@ -185,5 +185,47 @@ pub fn update_house_params(ctx: Context<UpdateHouse>, params: HouseParams) -> Re
 
 pub fn set_paused(ctx: Context<UpdateHouse>, paused: bool) -> Result<()> {
     ctx.accounts.house.paused = paused;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct SetHouseFilters<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(has_one = owner)]
+    pub house: Account<'info, House>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + HouseFilters::INIT_SPACE,
+        seeds = [b"filters", house.key().as_ref()],
+        bump,
+    )]
+    pub filters: Account<'info, HouseFilters>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Publish (or replace) the house's offer policy. Deny-mode with empty lists
+/// (the default) offers everything. The fixture rule is enforced on-chain at
+/// commit; the competition rule is honored by the off-chain router.
+pub fn set_house_filters(
+    ctx: Context<SetHouseFilters>,
+    competition_allow: bool,
+    competitions: Vec<u32>,
+    fixture_allow: bool,
+    fixtures: Vec<u64>,
+) -> Result<()> {
+    require!(competitions.len() <= 16, BthError::FilterListTooLong);
+    require!(fixtures.len() <= 32, BthError::FilterListTooLong);
+    let f = &mut ctx.accounts.filters;
+    f.house = ctx.accounts.house.key();
+    f.competition_allow = competition_allow;
+    f.competitions = competitions;
+    f.fixture_allow = fixture_allow;
+    f.fixtures = fixtures;
+    f.bump = ctx.bumps.filters;
     Ok(())
 }

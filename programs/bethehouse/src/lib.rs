@@ -53,6 +53,16 @@ pub mod bethehouse {
         instructions::set_paused(ctx, paused)
     }
 
+    pub fn set_house_filters(
+        ctx: Context<SetHouseFilters>,
+        competition_allow: bool,
+        competitions: Vec<u32>,
+        fixture_allow: bool,
+        fixtures: Vec<u64>,
+    ) -> Result<()> {
+        instructions::set_house_filters(ctx, competition_allow, competitions, fixture_allow, fixtures)
+    }
+
     // --- bets ---
     pub fn commit_bet(
         ctx: Context<CommitBet>,

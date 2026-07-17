@@ -283,3 +283,13 @@ button:disabled{opacity:.5;cursor:default}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+
+/* ---------- filter chips (house offer policy) ---------- */
+.filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  border:1px solid var(--rule);background:var(--card);padding:4px 9px;cursor:pointer;
+  border-radius:2px;transition:background .1s,border-color .1s;
+}
+.chip:hover{border-color:var(--ink-2)}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
