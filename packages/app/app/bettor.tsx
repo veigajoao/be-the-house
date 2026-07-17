@@ -4,6 +4,7 @@
 // Active (on-chain fill) -> Won/Lost (receipt with scores root + settle tx).
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fmtDuration,
   fmtOdds,
   fmtUsdc,
   OUTCOME_LABEL,
@@ -130,6 +131,55 @@ function Stub({ bet, result }: { bet: BetView; result: { score: number[]; scores
   );
 }
 
+function CouponSkeleton() {
+  return (
+    <>
+      <div className="coupon" aria-busy="true">
+        <div className="coupon-head">
+          <div>Fixture</div>
+          <div>1 Home</div>
+          <div>X Draw</div>
+          <div>2 Away</div>
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div className="fx" key={i}>
+            <div className="fx-info" style={{ gap: 6 }}>
+              <div className="skel skel-line" style={{ width: "45%" }} />
+              <div className="skel skel-line" style={{ width: "62%", height: 9 }} />
+            </div>
+            {[0, 1, 2].map((j) => (
+              <div key={j} className="pick" style={{ pointerEvents: "none" }}>
+                <div className="skel skel-line" style={{ width: 34, height: 15 }} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <p className="loading-note" style={{ marginTop: 10 }}>
+        <span className="spinner" /> loading markets from the TxLINE feed…
+      </p>
+    </>
+  );
+}
+
+function StubSkeleton() {
+  return (
+    <div className="stub" aria-busy="true">
+      <div className="skel skel-line" style={{ width: "40%", height: 10 }} />
+      <div className="skel skel-line" style={{ width: "65%", margin: "14px 0 8px" }} />
+      <div className="stub-fig">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <div className="skel skel-line" style={{ width: 34, height: 9, marginBottom: 4 }} />
+            <div className="skel skel-line" style={{ width: 46, height: 14 }} />
+          </div>
+        ))}
+      </div>
+      <div className="skel skel-line" style={{ width: 92, height: 22, marginTop: 13 }} />
+    </div>
+  );
+}
+
 export default function Bettor({
   config,
   wallet,
@@ -145,8 +195,14 @@ export default function Bettor({
   const [stake, setStake] = useState("50");
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  // "ready" = at least one fetch has completed, so empty means empty (not loading)
+  const [fixturesReady, setFixturesReady] = useState(false);
+  const [betsReady, setBetsReady] = useState(false);
   const pollRef = useRef(0);
   const owner = wallet.address;
+
+  // re-enter the loading state when the connected wallet changes
+  useEffect(() => setBetsReady(false), [owner]);
 
   const poll = useCallback(async () => {
     try {
@@ -167,6 +223,8 @@ export default function Bettor({
       setQuotes(q);
     } catch {
       /* API down */
+    } finally {
+      setFixturesReady(true);
     }
     if (!owner) {
       setBets([]);
@@ -187,6 +245,8 @@ export default function Bettor({
       }
     } catch {
       /* chain down */
+    } finally {
+      setBetsReady(true);
     }
   }, [results, owner]);
 
@@ -248,7 +308,9 @@ export default function Bettor({
     <>
       <section className="sec">
         <p className="eyebrow">Open markets</p>
-        {fixtures.length === 0 ? (
+        {!fixturesReady ? (
+          <CouponSkeleton />
+        ) : fixtures.length === 0 ? (
           <div className="empty">
             No fixtures open right now. Markets open as kickoff times are published.
           </div>
@@ -319,6 +381,11 @@ export default function Bettor({
               connect wallet
             </button>
           </div>
+        ) : !betsReady ? (
+          <div className="stubs">
+            <StubSkeleton />
+            <StubSkeleton />
+          </div>
         ) : bets.length === 0 ? (
           <div className="empty">No bets yet. Tick an outcome above.</div>
         ) : (
@@ -357,16 +424,18 @@ export default function Bettor({
                 <b>{pickBest ? fmtOdds(pickBest.effOdds[pick.outcome]) : "—"}</b>
               </div>
               <div className="ceil-note">
-                A ceiling, not a price. Your fill is the worse of now and 15s from now — so it
-                can hold or dip slightly, never improve.
-                {pick && Date.now() - pick.quotes.print.ts > 120_000 && (
+                A ceiling, not a price. Your fill is the worse of now and{" "}
+                {config ? fmtDuration(config.commitDelayMs) : "15s"} from now — so it can hold or
+                dip slightly, never improve.
+                {config && Date.now() - pick.quotes.print.ts > config.stalenessWindowMs && (
                   <>
                     {" "}
                     <b style={{ color: "var(--gold)" }}>
                       Heads up: last oracle price is{" "}
-                      {Math.round((Date.now() - pick.quotes.print.ts) / 60_000)}m old
+                      {Math.round((Date.now() - pick.quotes.print.ts) / 60_000)}m old — past this
+                      deployment&apos;s {fmtDuration(config.stalenessWindowMs)} price window
                       (quoting lull). If no fresh print lands around your commit, the bet
-                      auto-refunds in full after ~1h.
+                      auto-refunds in full after ~{fmtDuration(config.commitExpiryMs)}.
                     </b>
                   </>
                 )}
