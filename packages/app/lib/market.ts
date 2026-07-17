@@ -40,7 +40,7 @@ export interface QuotesView {
  * market entirely. Fall back to the last print in the updates cache (up to
  * this age) so the coupon keeps quoting — the UI shows the price's age, and a
  * commit during a lull safely auto-refunds if no print lands in its windows. */
-const MAX_PRINT_AGE_MS = 60 * 60_000;
+const MAX_PRINT_AGE_MS = 2 * 60 * 60_000; // devnet quoting can gap ~30min between bursts
 
 const is1x2 = (r: OddsRecord) =>
   r.SuperOddsType === MARKET_1X2 &&
