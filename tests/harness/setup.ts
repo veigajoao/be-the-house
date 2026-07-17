@@ -83,6 +83,8 @@ export const pda = {
       [Buffer.from("bet"), bettor.toBuffer(), u64le(nonce)],
       PROGRAM_ID,
     )[0],
+  houseFilters: (house: PublicKey) =>
+    PublicKey.findProgramAddressSync([Buffer.from("filters"), house.toBuffer()], PROGRAM_ID)[0],
   print: (fixtureId: bigint | number, tsMs: bigint | number) => {
     const ts = Buffer.alloc(8);
     ts.writeBigInt64LE(BigInt(tsMs));

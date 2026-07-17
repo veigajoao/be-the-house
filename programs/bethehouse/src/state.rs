@@ -62,6 +62,44 @@ pub struct House {
     pub bump: u8,
 }
 
+/// Optional per-house offer policy. Seeds: ["filters", house]; lazily created
+/// by `set_house_filters`; absence = the house offers everything.
+///
+/// A fixture is offered iff BOTH rules pass:
+///   competitions: if `competition_allow` -> CompetitionId must be listed,
+///                 else -> must NOT be listed  (empty deny list = all comps)
+///   fixtures:     same shape over FixtureIds
+///
+/// Enforcement: the fixture rule is enforced ON-CHAIN at commit (fixture_id
+/// is a commit argument). The competition rule is honored by the off-chain
+/// router only — a fixture's competition is feed metadata the program cannot
+/// verify without a fixture Merkle proof (spec note A / stretch goal).
+#[account]
+#[derive(InitSpace)]
+pub struct HouseFilters {
+    pub house: Pubkey,
+    /// true = offer ONLY listed competitions; false = all EXCEPT listed.
+    pub competition_allow: bool,
+    #[max_len(16)]
+    pub competitions: Vec<u32>,
+    /// true = offer ONLY listed fixtures; false = all EXCEPT listed.
+    pub fixture_allow: bool,
+    #[max_len(32)]
+    pub fixtures: Vec<u64>,
+    pub bump: u8,
+}
+
+impl HouseFilters {
+    pub fn fixture_offered(&self, fixture_id: u64) -> bool {
+        let listed = self.fixtures.contains(&fixture_id);
+        if self.fixture_allow {
+            listed
+        } else {
+            !listed
+        }
+    }
+}
+
 /// Per (house, fixture) exposure book. Seeds: ["exposure", house, fixture_id le].
 /// Lazily created at first commit.
 #[account]

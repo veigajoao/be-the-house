@@ -15,6 +15,10 @@ pub enum BthError {
     InsufficientFreeCollateral,
 
     // commit
+    #[msg("this house does not offer bets on this fixture")]
+    FixtureNotOffered,
+    #[msg("filter list exceeds the maximum length")]
+    FilterListTooLong,
     #[msg("outcome must be 0 (part1), 1 (draw) or 2 (part2)")]
     InvalidOutcome,
     #[msg("stake must be > 0")]

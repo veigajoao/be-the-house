@@ -4,16 +4,21 @@
 //   locked   = total_locked - overlap         (filled bets, netted)
 // total_locked already nets pending gross reservations into the book, so we
 // present: reserved = min(Σ pending reserved, total_locked), locked = rest.
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { chain } from "../../../lib/server";
+import { getHouseFilters } from "../../../lib/market";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ownerFilter = req.nextUrl.searchParams.get("owner");
   const { client } = chain();
-  const [houses, bets, exposures] = await Promise.all([
+  const [housesAll, bets, exposures] = await Promise.all([
     (client.program.account as any).house.all(),
     (client.program.account as any).bet.all(),
     (client.program.account as any).fixtureExposure.all(),
   ]);
+  const houses = ownerFilter
+    ? housesAll.filter((h: any) => h.account.owner.toBase58() === ownerFilter)
+    : housesAll;
 
   const out = [];
   for (const { publicKey, account } of houses) {
@@ -60,6 +65,7 @@ export async function GET() {
       locked: lockedNet,
       totalLocked,
       exposures: exps,
+      filters: await getHouseFilters(publicKey),
     });
   }
   return NextResponse.json(out);

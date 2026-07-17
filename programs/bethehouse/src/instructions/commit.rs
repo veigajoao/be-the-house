@@ -1,10 +1,13 @@
 use anchor_lang::prelude::*;
+use anchor_lang::AccountDeserialize;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::errors::BthError;
 use crate::instructions::{now_ms, resync_locks};
 use crate::math;
-use crate::state::{Bet, BetState, Config, FixtureExposure, Frontend, House, BPS, KEEPER_CRANKS};
+use crate::state::{
+    Bet, BetState, Config, FixtureExposure, Frontend, House, HouseFilters, BPS, KEEPER_CRANKS,
+};
 
 #[derive(Accounts)]
 #[instruction(fixture_id: u64, outcome: u8, stake: u64, nonce: u64)]
@@ -28,6 +31,11 @@ pub struct CommitBet<'info> {
 
     #[account(address = house.vault)]
     pub house_vault: Account<'info, TokenAccount>,
+
+    /// CHECK: seed-constrained to the house's filters PDA; empty account =
+    /// no policy published (offer everything). Enforced in the handler.
+    #[account(seeds = [b"filters", house.key().as_ref()], bump)]
+    pub house_filters: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
@@ -66,6 +74,16 @@ pub fn commit_bet(
     require!(!house.paused, BthError::HousePaused);
     require!(outcome <= 2, BthError::InvalidOutcome);
     require!(stake > 0, BthError::ZeroStake);
+
+    // House offer policy (fixture rule — on-chain enforceable since
+    // fixture_id is an argument; competition rule is router-level).
+    let filters_info = &ctx.accounts.house_filters;
+    if !filters_info.data_is_empty() {
+        require_keys_eq!(*filters_info.owner, crate::ID, BthError::FixtureNotOffered);
+        let data = filters_info.try_borrow_data()?;
+        let filters = HouseFilters::try_deserialize(&mut &data[..])?;
+        require!(filters.fixture_offered(fixture_id), BthError::FixtureNotOffered);
+    }
 
     let now = now_ms()?;
     require!(now < start_time_ms, BthError::PastKickoff);

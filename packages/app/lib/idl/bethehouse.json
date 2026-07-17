@@ -184,6 +184,32 @@
           "name": "house_vault"
         },
         {
+          "name": "house_filters",
+          "docs": [
+            "no policy published (offer everything). Enforced in the handler."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  108,
+                  116,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              }
+            ]
+          }
+        },
+        {
           "name": "exposure",
           "writable": true,
           "pda": {
@@ -984,6 +1010,82 @@
       ]
     },
     {
+      "name": "set_house_filters",
+      "discriminator": [
+        179,
+        230,
+        85,
+        71,
+        90,
+        112,
+        176,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "house"
+          ]
+        },
+        {
+          "name": "house"
+        },
+        {
+          "name": "filters",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  108,
+                  116,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "house"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "competition_allow",
+          "type": "bool"
+        },
+        {
+          "name": "competitions",
+          "type": {
+            "vec": "u32"
+          }
+        },
+        {
+          "name": "fixture_allow",
+          "type": "bool"
+        },
+        {
+          "name": "fixtures",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "set_paused",
       "discriminator": [
         91,
@@ -1455,6 +1557,19 @@
         199,
         210,
         151
+      ]
+    },
+    {
+      "name": "HouseFilters",
+      "discriminator": [
+        179,
+        2,
+        6,
+        115,
+        91,
+        112,
+        168,
+        241
       ]
     },
     {
@@ -2191,6 +2306,62 @@
           {
             "name": "paused",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HouseFilters",
+      "docs": [
+        "Optional per-house offer policy. Seeds: [\"filters\", house]; lazily created",
+        "by `set_house_filters`; absence = the house offers everything.",
+        "",
+        "A fixture is offered iff BOTH rules pass:",
+        "competitions: if `competition_allow` -> CompetitionId must be listed,",
+        "else -> must NOT be listed  (empty deny list = all comps)",
+        "fixtures:     same shape over FixtureIds",
+        "",
+        "Enforcement: the fixture rule is enforced ON-CHAIN at commit (fixture_id",
+        "is a commit argument). The competition rule is honored by the off-chain",
+        "router only — a fixture's competition is feed metadata the program cannot",
+        "verify without a fixture Merkle proof (spec note A / stretch goal)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "house",
+            "type": "pubkey"
+          },
+          {
+            "name": "competition_allow",
+            "docs": [
+              "true = offer ONLY listed competitions; false = all EXCEPT listed."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "competitions",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "fixture_allow",
+            "docs": [
+              "true = offer ONLY listed fixtures; false = all EXCEPT listed."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "fixtures",
+            "type": {
+              "vec": "u64"
+            }
           },
           {
             "name": "bump",

@@ -4,6 +4,7 @@ export interface FixtureRow {
   Participant2: string;
   StartTime: number;
   Competition: string;
+  CompetitionId: number;
 }
 
 export interface Quotes {
@@ -60,6 +61,12 @@ export interface HouseView {
     locked: number;
     openBets: number;
   }[];
+  filters: {
+    competitionAllow: boolean;
+    competitions: number[];
+    fixtureAllow: boolean;
+    fixtures: string[];
+  } | null;
 }
 
 export interface AppConfig {

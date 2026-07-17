@@ -48,6 +48,7 @@ export function makePdas(programId: PublicKey) {
       find([Buffer.from("bet"), bettor.toBuffer(), u64le(nonce)]),
     print: (fixtureId: bigint | number, tsMs: bigint | number) =>
       find([Buffer.from("print"), u64le(fixtureId), i64le(tsMs)]),
+    houseFilters: (house: PublicKey) => find([Buffer.from("filters"), house.toBuffer()]),
   };
 }
 
