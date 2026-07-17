@@ -12,8 +12,14 @@ interface Fixture {
 
 export async function GET(req: NextRequest) {
   const fixtureFilter = req.nextUrl.searchParams.get("fixtureId");
+  const ownerFilter = req.nextUrl.searchParams.get("owner");
   const { client } = chain();
-  const bets = await (client.program.account as any).bet.all();
+  // filter server-side by bettor when an owner is given (connected wallet)
+  const bets = ownerFilter
+    ? await (client.program.account as any).bet.all([
+        { memcmp: { offset: 8, bytes: ownerFilter } }, // Bet.bettor is the first field
+      ])
+    : await (client.program.account as any).bet.all();
 
   let fixtures: Fixture[] = [];
   try {

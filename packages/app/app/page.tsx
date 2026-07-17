@@ -1,17 +1,20 @@
 "use client";
-// Shell: masthead + wallet strip + Bet/House tabs (football-pools coupon
-// visual direction — see .context design spec).
+// Shell: masthead + wallet chip + Bet/House tabs. Bets are signed by the
+// user's connected wallet (bolao-copa @solana/react-hooks pattern).
 import { useCallback, useEffect, useState } from "react";
 import Bettor from "./bettor";
 import House from "./house";
 import { fmtUsdc, type AppConfig } from "../lib/types";
+import { useBthWallet, useUsdcBalance, WalletPicker, short } from "../lib/wallet";
 
 export default function App() {
+  const wallet = useBthWallet();
+  const usdc = useUsdcBalance(wallet.address);
   const [tab, setTab] = useState<"bet" | "house">("bet");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [fauceting, setFauceting] = useState(false);
   const [airdropTo, setAirdropTo] = useState("");
-  const [airdropMsg, setAirdropMsg] = useState("");
+  const [msg, setMsg] = useState("");
 
   const loadConfig = useCallback(async () => {
     try {
@@ -23,26 +26,28 @@ export default function App() {
 
   useEffect(() => {
     void loadConfig();
-    const t = setInterval(loadConfig, 10_000);
+    const t = setInterval(loadConfig, 30_000);
     return () => clearInterval(t);
   }, [loadConfig]);
 
-  async function faucet(to?: string) {
+  async function faucet(to: string | null) {
+    if (!to) {
+      wallet.connect();
+      return;
+    }
     setFauceting(true);
-    setAirdropMsg("");
+    setMsg("");
     try {
       const res = await fetch("/api/faucet", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(to ? { to, amountUsdc: 1000 } : {}),
+        body: JSON.stringify({ to, amountUsdc: 1000 }),
       });
       const body = await res.json();
-      if (!res.ok) setAirdropMsg(body.error ?? "airdrop failed");
-      else if (to) setAirdropMsg(`✓ 1000 USDC → ${to.slice(0, 4)}…${to.slice(-4)}`);
+      setMsg(res.ok ? `✓ 1000 USDC → ${short(to)}` : (body.error ?? "airdrop failed"));
     } catch (e) {
-      setAirdropMsg((e as Error).message.slice(0, 80));
+      setMsg((e as Error).message.slice(0, 90));
     }
-    await loadConfig();
     setFauceting(false);
   }
 
@@ -53,22 +58,27 @@ export default function App() {
           <div className="logo">
             BeThe<span>House</span>
           </div>
-          <div className="tag">Permissionless sportsbook · Solana · TxLINE feed</div>
+          <div className="tag">Permissionless sportsbook · Solana devnet · TxLINE feed</div>
           <div className="wallet-strip">
-            {config ? (
+            {wallet.connected ? (
               <>
                 <span>
-                  wallet <b>{config.bettor.slice(0, 4)}…{config.bettor.slice(-4)}</b>
+                  wallet <b>{short(wallet.address!)}</b>
                 </span>
                 <span>
-                  balance <b>{fmtUsdc(config.bettorUsdc)} USDC</b>
+                  balance <b>{fmtUsdc(usdc)} USDC</b>
                 </span>
-                <button className="faucet" disabled={fauceting} onClick={() => faucet()}>
-                  {fauceting ? "minting…" : "+1000 USDC faucet"}
+                <button className="faucet" disabled={fauceting} onClick={() => faucet(wallet.address)}>
+                  {fauceting ? "funding…" : "+1000 USDC + SOL"}
+                </button>
+                <button className="faucet" onClick={wallet.disconnect}>
+                  disconnect
                 </button>
               </>
             ) : (
-              <span>connecting…</span>
+              <button className="faucet" onClick={() => wallet.connect()}>
+                connect wallet
+              </button>
             )}
           </div>
           <div className="wallet-strip">
@@ -94,17 +104,15 @@ export default function App() {
             >
               airdrop
             </button>
-            {airdropMsg && (
-              <span style={{ color: airdropMsg.startsWith("✓") ? "var(--green)" : "var(--stamp)" }}>
-                {airdropMsg}
-              </span>
+            {msg && (
+              <span style={{ color: msg.startsWith("✓") ? "var(--green)" : "var(--stamp)" }}>{msg}</span>
             )}
           </div>
         </div>
         <div className="mast-meta">
           1X2 FULL-TIME · PRE-MATCH ONLY
           <br />
-          USDC · SURFNET DEMO
+          USDC · DEVNET
           <br />
           {config && (
             <>
@@ -115,12 +123,7 @@ export default function App() {
       </header>
 
       <div className="tabs" role="tablist">
-        <button
-          className="tab"
-          role="tab"
-          aria-selected={tab === "bet"}
-          onClick={() => setTab("bet")}
-        >
+        <button className="tab" role="tab" aria-selected={tab === "bet"} onClick={() => setTab("bet")}>
           Bet
         </button>
         <button
@@ -134,11 +137,13 @@ export default function App() {
       </div>
 
       <div hidden={tab !== "bet"}>
-        <Bettor config={config} />
+        <Bettor config={config} wallet={wallet} />
       </div>
       <div hidden={tab !== "house"}>
         <House />
       </div>
+
+      <WalletPicker wallet={wallet} />
     </div>
   );
 }

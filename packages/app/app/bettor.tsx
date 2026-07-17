@@ -13,6 +13,7 @@ import {
   type FixtureRow,
   type Quotes,
 } from "../lib/types";
+import type { useBthWallet } from "../lib/wallet";
 
 const API = "/api"; // same-origin route handlers (Vercel-ready, no CORS)
 
@@ -129,7 +130,13 @@ function Stub({ bet, result }: { bet: BetView; result: { score: number[]; scores
   );
 }
 
-export default function Bettor({ config }: { config: AppConfig | null }) {
+export default function Bettor({
+  config,
+  wallet,
+}: {
+  config: AppConfig | null;
+  wallet: ReturnType<typeof useBthWallet>;
+}) {
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
   const [quotes, setQuotes] = useState<Record<number, Quotes>>({});
   const [bets, setBets] = useState<BetView[]>([]);
@@ -139,6 +146,7 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
   const pollRef = useRef(0);
+  const owner = wallet.address;
 
   const poll = useCallback(async () => {
     try {
@@ -160,8 +168,12 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
     } catch {
       /* API down */
     }
+    if (!owner) {
+      setBets([]);
+      return;
+    }
     try {
-      const b = (await fetch("/api/bets").then((r) => r.json())) as BetView[];
+      const b = (await fetch(`/api/bets?owner=${owner}`).then((r) => r.json())) as BetView[];
       setBets(b);
       // fetch receipts for settled fixtures we haven't resolved yet
       for (const bet of b) {
@@ -176,7 +188,7 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
     } catch {
       /* chain down */
     }
-  }, [results]);
+  }, [results, owner]);
 
   useEffect(() => {
     void poll();
@@ -191,9 +203,14 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
 
   async function place() {
     if (!pick) return;
+    if (!wallet.connected) {
+      wallet.connect(); // opens the picker; user re-taps Place after connecting
+      return;
+    }
     setPlacing(true);
     setError("");
     try {
+      // 1. server builds the unsigned commit tx (routes to a house that can fill)
       const res = await fetch("/api/bet", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -201,20 +218,22 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
           fixtureId: pick.fixture.FixtureId,
           outcome: pick.outcome,
           stakeUsdc: Number(stake),
+          bettor: wallet.address,
         }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "commit failed");
-      const best = bestFor(pick.quotes, pick.outcome)!;
+      // 2. the connected wallet signs & sends it (mobile → redirects to the app)
+      await wallet.sign(body.tx);
       ceilings.set(body.bet, {
-        ceiling: best.effOdds[pick.outcome],
-        spreadBps: best.spreadBps,
-        oddsCap: best.oddsCap,
+        ceiling: body.ceiling,
+        spreadBps: body.spreadBps,
+        oddsCap: body.oddsCap,
       });
       setPick(null);
       void poll();
     } catch (e) {
-      setError((e as Error).message.slice(0, 160));
+      setError((e as Error).message.slice(0, 180));
     } finally {
       setPlacing(false);
     }
@@ -293,7 +312,14 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
 
       <section className="sec">
         <p className="eyebrow">My bets</p>
-        {bets.length === 0 ? (
+        {!wallet.connected ? (
+          <div className="empty">
+            Connect a wallet to place bets and see your slips.{" "}
+            <button className="faucet" onClick={() => wallet.connect()} style={{ marginLeft: 8 }}>
+              connect wallet
+            </button>
+          </div>
+        ) : bets.length === 0 ? (
           <div className="empty">No bets yet. Tick an outcome above.</div>
         ) : (
           <div className="stubs">
@@ -377,8 +403,12 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
                 </b>
               </div>
             </div>
-            <button className="btn" disabled={placing || !pickBest} onClick={place}>
-              {placing ? "Committing…" : "Place bet"}
+            <button className="btn" disabled={placing || wallet.busy || !pickBest} onClick={place}>
+              {placing || wallet.busy
+                ? "Approve in your wallet…"
+                : wallet.connected
+                  ? "Place bet"
+                  : "Connect wallet to bet"}
             </button>
             <div className="guar">✓ Guaranteed fill — no slippage, no partial fills</div>
             {error && (

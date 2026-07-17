@@ -8,9 +8,32 @@ import {
   createMintToInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { USDC_MINT } from "@bethehouse/sdk";
 import { chain } from "../../../lib/server";
+
+const SOL_TOPUP = 0.05 * LAMPORTS_PER_SOL; // enough for tx fees + bet-account rent
+const SOL_FLOOR = 0.02 * LAMPORTS_PER_SOL;
+
+/** Give a connected user wallet some devnet SOL for fees + rent (from the
+ * admin key). No-op on surfnet or when the wallet already has enough. */
+async function topUpSol(client: ReturnType<typeof chain>["client"], to: PublicKey) {
+  if (to.equals(client.signer.publicKey)) return; // demo wallet funds itself
+  try {
+    const bal = await client.connection.getBalance(to);
+    if (bal >= SOL_FLOOR) return;
+    const tx = new Transaction().add(
+      SystemProgram.transfer({ fromPubkey: client.signer.publicKey, toPubkey: to, lamports: SOL_TOPUP }),
+    );
+    tx.recentBlockhash = (await client.connection.getLatestBlockhash()).blockhash;
+    tx.feePayer = client.signer.publicKey;
+    tx.sign(client.signer);
+    const sig = await client.connection.sendRawTransaction(tx.serialize());
+    await client.connection.confirmTransaction(sig, "confirmed");
+  } catch {
+    /* best-effort; USDC still lands */
+  }
+}
 
 export async function POST(req: NextRequest) {
   const { client } = chain();
@@ -62,6 +85,7 @@ export async function POST(req: NextRequest) {
     tx.sign(client.signer);
     const sig = await client.connection.sendRawTransaction(tx.serialize());
     await client.connection.confirmTransaction(sig, "confirmed");
+    await topUpSol(client, to); // devnet SOL for fees + rent so the user can bet
     return NextResponse.json({ ok: true, to: to.toBase58(), added: amountUsdc, via: "mintTo", sig });
   } catch (e) {
     return NextResponse.json(
