@@ -9,7 +9,7 @@ import { useBthWallet, useUsdcBalance, WalletPicker, short } from "../lib/wallet
 
 export default function App() {
   const wallet = useBthWallet();
-  const usdc = useUsdcBalance(wallet.address);
+  const balance = useUsdcBalance(wallet.address);
   const [tab, setTab] = useState<"bet" | "house">("bet");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [fauceting, setFauceting] = useState(false);
@@ -44,7 +44,13 @@ export default function App() {
         body: JSON.stringify({ to, amountUsdc: 1000 }),
       });
       const body = await res.json();
-      setMsg(res.ok ? `✓ 1000 USDC → ${short(to)}` : (body.error ?? "airdrop failed"));
+      if (res.ok) {
+        setMsg(`✓ 1000 USDC → ${short(to)}`);
+        // refresh the connected wallet's balance without a page reload
+        if (wallet.address && to === wallet.address) void balance.refresh();
+      } else {
+        setMsg(body.error ?? "airdrop failed");
+      }
     } catch (e) {
       setMsg((e as Error).message.slice(0, 90));
     }
@@ -66,7 +72,14 @@ export default function App() {
                   wallet <b>{short(wallet.address!)}</b>
                 </span>
                 <span>
-                  balance <b>{fmtUsdc(usdc)} USDC</b>
+                  balance{" "}
+                  {balance.loading ? (
+                    <b className="loading-note" style={{ display: "inline-flex" }}>
+                      <span className="spinner" />
+                    </b>
+                  ) : (
+                    <b>{fmtUsdc(balance.amount)} USDC</b>
+                  )}
                 </span>
                 <button className="faucet" disabled={fauceting} onClick={() => faucet(wallet.address)}>
                   {fauceting ? "funding…" : "+1000 USDC + SOL"}

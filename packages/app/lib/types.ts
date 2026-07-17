@@ -66,9 +66,13 @@ export interface AppConfig {
   protocolFeeBps: number;
   frontendFeeBps: number;
   keeperReward: number;
-  bettor: string;
-  bettorUsdc: number;
   programId: string;
+  // timing windows (ms) — deployment-specific (tight mainnet spec vs widened devnet)
+  commitDelayMs: number;
+  stalenessWindowMs: number;
+  fillToleranceMs: number;
+  commitExpiryMs: number;
+  voidAfterMs: number;
 }
 
 export const OUTCOME_LABEL = ["Home", "Draw", "Away"];
@@ -76,3 +80,13 @@ export const OUTCOME_SYM = ["1", "X", "2"];
 export const fmtOdds = (x1000: number) => (x1000 / 1000).toFixed(3);
 export const fmtUsdc = (micro: number) =>
   (micro / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Human duration from ms: 15000→"15s", 2700000→"45min", 3600000→"1h", 7200000→"2h". */
+export function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}min`;
+  const h = m / 60;
+  return `${Number.isInteger(h) ? h : h.toFixed(1)}h`;
+}

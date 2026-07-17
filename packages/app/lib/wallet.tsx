@@ -83,11 +83,26 @@ export function useBthWallet() {
   return { modal, address, connected: !!session, busy, connect, pick, disconnect, sign };
 }
 
-/** USDC balance of the connected wallet (base units → number). */
-export function useUsdcBalance(owner: string | null): number {
+/** USDC balance of the connected wallet (base units) + a manual refresh
+ * (call it right after a faucet/airdrop instead of waiting for the poll). */
+export function useUsdcBalance(owner: string | null): {
+  amount: number;
+  loading: boolean;
+  refresh: () => Promise<void>;
+} {
   const usdc = useSplToken(USDC_MINT, owner ? { owner } : { owner: USDC_MINT });
-  if (!owner || !usdc.balance) return 0;
-  return Number(usdc.balance.amount);
+  return {
+    amount: owner && usdc.balance ? Number(usdc.balance.amount) : 0,
+    loading: !!owner && usdc.isFetching,
+    refresh: async () => {
+      // the freshly-minted ATA may not be in the client cache yet; a couple of
+      // spaced refreshes catch it without a page reload
+      for (let i = 0; i < 4; i++) {
+        await usdc.refresh().catch(() => {});
+        await new Promise((r) => setTimeout(r, 1_200));
+      }
+    },
+  };
 }
 
 // ---- picker dialog (styled to the coupon aesthetic) ----

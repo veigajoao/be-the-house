@@ -263,3 +263,23 @@ body{
 .pick:disabled:hover{background:none}
 .exp-block{margin-bottom:18px}
 button:disabled{opacity:.5;cursor:default}
+
+/* ---------- loading skeletons ---------- */
+.skel{
+  background:linear-gradient(90deg,var(--rule) 25%,var(--card) 40%,var(--rule) 55%);
+  background-size:300% 100%;
+  animation:skel 1.3s ease-in-out infinite;
+}
+@keyframes skel{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+.skel-line{height:12px;border-radius:2px}
+.loading-note{
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em;
+  display:flex;align-items:center;gap:8px;
+}
+.spinner{
+  width:11px;height:11px;border:2px solid var(--rule);border-top-color:var(--ink-2);
+  border-radius:50%;animation:spin .7s linear infinite;display:inline-block;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation:none}}
