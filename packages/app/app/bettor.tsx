@@ -254,6 +254,12 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
                       {f.Competition} · kickoff{" "}
                       {new Date(f.StartTime).toUTCString().slice(17, 22)} UTC ·{" "}
                       {countdown(f.StartTime)}
+                      {q && Date.now() - q.print.ts > 120_000 && (
+                        <span style={{ color: "var(--gold)" }}>
+                          {" "}
+                          · price {Math.round((Date.now() - q.print.ts) / 60_000)}m old
+                        </span>
+                      )}
                     </div>
                   </div>
                   {[0, 1, 2].map((o) => {
@@ -327,6 +333,17 @@ export default function Bettor({ config }: { config: AppConfig | null }) {
               <div className="ceil-note">
                 A ceiling, not a price. Your fill is the worse of now and 15s from now — so it
                 can hold or dip slightly, never improve.
+                {pick && Date.now() - pick.quotes.print.ts > 120_000 && (
+                  <>
+                    {" "}
+                    <b style={{ color: "var(--gold)" }}>
+                      Heads up: last oracle price is{" "}
+                      {Math.round((Date.now() - pick.quotes.print.ts) / 60_000)}m old
+                      (quoting lull). If no fresh print lands around your commit, the bet
+                      auto-refunds in full after ~1h.
+                    </b>
+                  </>
+                )}
               </div>
             </div>
             <div className="field">

@@ -36,15 +36,30 @@ export interface QuotesView {
   best: string[][];
 }
 
+/** Pre-match quoting is bursty; during a lull the snapshot endpoint drops the
+ * market entirely. Fall back to the last print in the updates cache (up to
+ * this age) so the coupon keeps quoting — the UI shows the price's age, and a
+ * commit during a lull safely auto-refunds if no print lands in its windows. */
+const MAX_PRINT_AGE_MS = 60 * 60_000;
+
+const is1x2 = (r: OddsRecord) =>
+  r.SuperOddsType === MARKET_1X2 &&
+  r.BookmakerId === STABLE_PRICE_BOOKMAKER_ID &&
+  !r.MarketPeriod &&
+  !r.InRunning;
+
 export async function getQuotes(fixtureId: number): Promise<QuotesView | null> {
   const snapshot = await txline().oddsSnapshot(fixtureId);
-  const print = snapshot.find(
-    (r: OddsRecord) =>
-      r.SuperOddsType === MARKET_1X2 &&
-      r.BookmakerId === STABLE_PRICE_BOOKMAKER_ID &&
-      !r.MarketPeriod &&
-      !r.InRunning,
-  );
+  let print = snapshot.find(is1x2);
+  if (!print) {
+    try {
+      const updates = (await txline().oddsUpdates(fixtureId)).filter(is1x2);
+      updates.sort((a, b) => b.Ts - a.Ts);
+      if (updates[0] && Date.now() - updates[0].Ts <= MAX_PRINT_AGE_MS) print = updates[0];
+    } catch {
+      /* no updates cache */
+    }
+  }
   if (!print) return null;
 
   const { client } = chain();
