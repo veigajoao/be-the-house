@@ -10,6 +10,8 @@ export default function App() {
   const [tab, setTab] = useState<"bet" | "house">("bet");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [fauceting, setFauceting] = useState(false);
+  const [airdropTo, setAirdropTo] = useState("");
+  const [airdropMsg, setAirdropMsg] = useState("");
 
   const loadConfig = useCallback(async () => {
     try {
@@ -25,9 +27,21 @@ export default function App() {
     return () => clearInterval(t);
   }, [loadConfig]);
 
-  async function faucet() {
+  async function faucet(to?: string) {
     setFauceting(true);
-    await fetch("/api/faucet", { method: "POST" });
+    setAirdropMsg("");
+    try {
+      const res = await fetch("/api/faucet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(to ? { to, amountUsdc: 1000 } : {}),
+      });
+      const body = await res.json();
+      if (!res.ok) setAirdropMsg(body.error ?? "airdrop failed");
+      else if (to) setAirdropMsg(`✓ 1000 USDC → ${to.slice(0, 4)}…${to.slice(-4)}`);
+    } catch (e) {
+      setAirdropMsg((e as Error).message.slice(0, 80));
+    }
     await loadConfig();
     setFauceting(false);
   }
@@ -49,12 +63,41 @@ export default function App() {
                 <span>
                   balance <b>{fmtUsdc(config.bettorUsdc)} USDC</b>
                 </span>
-                <button className="faucet" disabled={fauceting} onClick={faucet}>
+                <button className="faucet" disabled={fauceting} onClick={() => faucet()}>
                   {fauceting ? "minting…" : "+1000 USDC faucet"}
                 </button>
               </>
             ) : (
               <span>connecting…</span>
+            )}
+          </div>
+          <div className="wallet-strip">
+            <input
+              value={airdropTo}
+              onChange={(e) => setAirdropTo(e.target.value)}
+              placeholder="airdrop 1000 USDC to any wallet…"
+              aria-label="Airdrop destination wallet"
+              style={{
+                background: "var(--card)",
+                border: "1px solid var(--rule)",
+                color: "var(--ink)",
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                padding: "3px 8px",
+                width: 300,
+              }}
+            />
+            <button
+              className="faucet"
+              disabled={fauceting || !airdropTo.trim()}
+              onClick={() => faucet(airdropTo.trim())}
+            >
+              airdrop
+            </button>
+            {airdropMsg && (
+              <span style={{ color: airdropMsg.startsWith("✓") ? "var(--green)" : "var(--stamp)" }}>
+                {airdropMsg}
+              </span>
             )}
           </div>
         </div>
