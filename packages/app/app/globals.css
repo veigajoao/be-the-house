@@ -376,3 +376,17 @@ button:disabled{opacity:.5;cursor:default}
 html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.live-dot{animation:none}}
 .doc,#how{scroll-margin-top:78px}
+
+/* ---------- house param guidance ---------- */
+.phelp{font-size:12px;color:var(--ink-2);line-height:1.5;margin:5px 0 2px}
+.phelp b{color:var(--ink);font-weight:600}
+.phelp .hint{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.02em}
+.house-intro{
+  border:1px solid var(--ink);background:var(--card);padding:16px 18px;margin-bottom:22px;
+}
+.house-intro h3{
+  font-family:var(--cond);font-weight:700;font-size:15px;letter-spacing:.04em;text-transform:uppercase;
+  margin-bottom:8px;
+}
+.house-intro p{font-size:13.5px;color:var(--ink-2);line-height:1.6;max-width:74ch;margin:6px 0}
+.house-intro b{color:var(--ink);font-weight:600}
