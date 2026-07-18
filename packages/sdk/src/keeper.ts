@@ -19,6 +19,17 @@ import {
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), "[keeper]", ...a);
 
+// Search windows — mirror the on-chain Config so the keeper never picks a print
+// the program would reject. Generous by design for devnet's bursty feed.
+const COMMIT_LOOKBACK_MS = 7_200_000; // <= config.staleness_window_ms (2h)
+const FILL_TOLERANCE_MS = 7_200_000; // <= config.fill_tolerance_ms (2h)
+// How long past target to wait for a genuinely fresher print (preserving the
+// worse-of-two anti-snipe on a healthy feed) before falling back to the commit
+// price. ~mainnet cadence; on devnet the fallback then carries the fill.
+const FRESH_GRACE_MS = 300_000;
+// Refund is the true-outage safety net only (matches config.commit_expiry_ms, 3h).
+const COMMIT_EXPIRY_MS = 10_800_000;
+
 export interface KeeperOptions {
   /** true when the RPC is a surfpool fork: refresh oracle roots before proving. */
   surfnetMode: boolean;
@@ -127,10 +138,13 @@ export class Keeper {
         pending++;
         const targetTs = Number(account.targetTsMs);
         const commitTs = Number(account.commitTsMs);
-        if (nowMs > targetTs + 3_600_000) {
-          await this.tryRefund(publicKey, account);
-        } else if (nowMs >= targetTs) {
-          await this.tryFill(publicKey, account, commitTs, targetTs);
+        if (nowMs >= targetTs) {
+          // Always try to fill first (the fallback fills even during a lull);
+          // only refund if a fill was impossible AND the bet has truly expired.
+          const filled = await this.tryFill(publicKey, account, commitTs, targetTs);
+          if (!filled && nowMs > targetTs + COMMIT_EXPIRY_MS) {
+            await this.tryRefund(publicKey, account);
+          }
         }
       } else if (state === "active") {
         active++;
@@ -140,12 +154,21 @@ export class Keeper {
     return { bets: bets.length, pending, active };
   }
 
-  /** Pick the commit print (latest <= commit_ts) and target print (earliest >= target_ts). */
+  /**
+   * Pick the two prints for the fill:
+   *  - commit: latest proven print at/before commit_ts (within staleness).
+   *  - target: earliest genuine print at/after target_ts (worse-of-two). If the
+   *    feed stayed silent past target_ts + FRESH_GRACE_MS, FALL BACK to the
+   *    commit print itself (fill at the last proven price).
+   * Returns null only when there is no commit-side print at all (true oracle
+   * silence -> eventual refund) or while still within the fresh-print grace.
+   */
   private async pickPrints(
     fixtureId: number,
     commitTs: number,
     targetTs: number,
-  ): Promise<{ commit: OddsRecord; target: OddsRecord } | null> {
+    nowMs: number,
+  ): Promise<{ commit: OddsRecord; target: OddsRecord; fallback: boolean } | null> {
     const updates = (await this.txline.oddsUpdates(fixtureId)).filter(
       (r) =>
         r.SuperOddsType === MARKET_1X2 &&
@@ -153,14 +176,20 @@ export class Keeper {
         !r.MarketPeriod &&
         !r.InRunning,
     );
-    const commitCandidates = updates
-      .filter((r) => r.Ts <= commitTs && r.Ts >= commitTs - 120_000)
-      .sort((a, b) => b.Ts - a.Ts);
-    const targetCandidates = updates
-      .filter((r) => r.Ts >= targetTs && r.Ts <= targetTs + 90_000)
-      .sort((a, b) => a.Ts - b.Ts);
-    if (!commitCandidates.length || !targetCandidates.length) return null;
-    return { commit: commitCandidates[0], target: targetCandidates[0] };
+    const commit = updates
+      .filter((r) => r.Ts <= commitTs && r.Ts >= commitTs - COMMIT_LOOKBACK_MS)
+      .sort((a, b) => b.Ts - a.Ts)[0];
+    if (!commit) return null; // no proven commit price -> true outage
+
+    // A genuinely fresher print at/after target (keeps worse-of-two live).
+    const target = updates
+      .filter((r) => r.Ts > commit.Ts && r.Ts >= targetTs && r.Ts <= targetTs + FILL_TOLERANCE_MS)
+      .sort((a, b) => a.Ts - b.Ts)[0];
+    if (target) return { commit, target, fallback: false };
+
+    // None yet: wait out the grace for a fresh print, then fall back to commit.
+    if (nowMs < targetTs + FRESH_GRACE_MS) return null;
+    return { commit, target: commit, fallback: true };
   }
 
   /** Surfnet mode: copy the current mainnet root account into the fork
@@ -198,39 +227,43 @@ export class Keeper {
     return this.lut;
   }
 
+  /** Returns true once the bet is filled (so the caller won't try to refund). */
   private async tryFill(
     betPda: PublicKey,
     bet: BetAccount,
     commitTs: number,
     targetTs: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const fixtureId = Number(bet.fixtureId);
-    const prints = await this.pickPrints(fixtureId, commitTs, targetTs);
+    const prints = await this.pickPrints(fixtureId, commitTs, targetTs, Date.now());
     if (!prints) {
-      log(`bet ${betPda.toBase58().slice(0, 8)}: no qualifying prints in the fill windows yet`);
-      return; // (oracle silence -> expiry refund eventually)
+      log(`bet ${betPda.toBase58().slice(0, 8)}: waiting for a proven price (commit-side or fresher target)`);
+      return false;
     }
 
+    // In the fallback the commit print serves both sides — prove it once.
+    const records = prints.fallback ? [prints.commit] : [prints.commit, prints.target];
     // proofs 404 until the 5-min batch root is published (~35s past boundary)
-    let commitProof, targetProof;
+    let proofs;
     try {
-      [commitProof, targetProof] = await Promise.all([
-        this.txline.oddsValidation(prints.commit.MessageId, prints.commit.Ts),
-        this.txline.oddsValidation(prints.target.MessageId, prints.target.Ts),
-      ]);
+      proofs = await Promise.all(
+        records.map((r) => this.txline.oddsValidation(r.MessageId, r.Ts)),
+      );
     } catch (e) {
       if (e instanceof TxLineError && e.status === 404) {
         log(`bet ${betPda.toBase58().slice(0, 8)}: proofs not yet published, waiting`);
-        return;
+        return false;
       }
       throw e;
     }
 
-    const roots = [oddsRootPda(prints.commit.Ts), oddsRootPda(prints.target.Ts)];
+    const roots = [...new Set(records.map((r) => oddsRootPda(r.Ts).toBase58()))].map(
+      (s) => new PublicKey(s),
+    );
     for (const r of roots) await this.refreshRoot(r);
     const lut = await this.ensureLut(roots);
 
-    for (const proof of [commitProof, targetProof]) {
+    for (const proof of proofs) {
       const sig = await this.client.provePrint(proof, lut);
       if (sig) log(`proved print ts=${proof.odds.Ts} (${sig.slice(0, 8)})`);
     }
@@ -244,9 +277,13 @@ export class Keeper {
       { feeVault: frontend.feeVault },
       this.crankerToken,
       prints.commit.Ts,
-      prints.target.Ts,
+      prints.target.Ts, // == commit.Ts in the fallback -> same ProvenPrint account
     );
-    log(`filled bet ${betPda.toBase58().slice(0, 8)} (${sig.slice(0, 8)})`);
+    log(
+      `filled bet ${betPda.toBase58().slice(0, 8)} ` +
+        `(${prints.fallback ? "fallback: last proven price" : "worse-of-two"}) (${sig.slice(0, 8)})`,
+    );
+    return true;
   }
 
   private async trySettle(betPda: PublicKey, bet: BetAccount): Promise<void> {
