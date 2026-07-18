@@ -22,7 +22,7 @@ if (!toArg) {
 }
 const to = new PublicKey(toArg);
 const amountUsdc = Number(amountArg ?? 1000);
-const mint = new PublicKey(process.env.USDC_MINT ?? "ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6");
+const mint = new PublicKey(process.env.USDC_MINT ?? "5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y");
 const rpc = process.env.DEVNET_RPC_URL ?? "https://api.devnet.solana.com";
 
 const admin = Keypair.fromSecretKey(

@@ -8,7 +8,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("Au4V34qyUhMfAL9HfC3QLTtTi6Mua7WdqDYUdZqhEdGS");
+declare_id!("51bQ1HLbg7urERU7TU8E2KZsSnnniCLLmE9eTMetgH4A");
 
 #[program]
 pub mod bethehouse {
