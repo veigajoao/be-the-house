@@ -138,6 +138,8 @@ body{
 .row.sub b{color:var(--ink-2);font-weight:500}
 .row.big{font-size:15px;color:var(--ink);border-top:1px dashed var(--rule);margin-top:6px;padding-top:8px}
 .fieldnote{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin:-6px 0 12px;line-height:1.4}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.pager span{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.02em}
 .btn{
   width:100%;background:var(--ink);color:var(--card);border:1px solid var(--ink);
   font-family:var(--cond);font-weight:600;font-size:14px;letter-spacing:.14em;text-transform:uppercase;

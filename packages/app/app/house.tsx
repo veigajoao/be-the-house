@@ -742,6 +742,15 @@ function ExposurePanel({ house, fixtures }: { house: HouseView; fixtures: Fixtur
 }
 
 // ---------- all houses (read-only) ----------
+const HOUSES_PER_PAGE = 8;
+// Wide enough for 7-figure USDC (e.g. 1,000,488.24) without column collision.
+const HOUSE_COLS = "1fr 66px 104px 104px 104px";
+const numCell = {
+  pointerEvents: "none" as const,
+  fontSize: 12.5,
+  fontVariantNumeric: "tabular-nums" as const,
+};
+
 function AllHouses({
   houses,
   fixtures,
@@ -751,6 +760,7 @@ function AllHouses({
   fixtures: FixtureRow[];
   myOwner: string | null;
 }) {
+  const [page, setPage] = useState(0);
   const compName = (id: number) => fixtures.find((f) => f.CompetitionId === id)?.Competition ?? `#${id}`;
   const policy = (h: HouseView) => {
     if (!h.filters) return "offers all markets";
@@ -763,6 +773,35 @@ function AllHouses({
       parts.push(`${h.filters.fixtureAllow ? "only" : "excl"} ${h.filters.fixtures.length} match(es)`);
     return parts.length ? parts.join(" · ") : "offers all markets";
   };
+
+  // Your house is pinned at the top; every other house is listed below it,
+  // ordered by size (total deposited) and paginated.
+  const mine = myOwner ? houses.find((h) => h.owner === myOwner) ?? null : null;
+  const others = houses
+    .filter((h) => h.owner !== myOwner)
+    .sort((a, b) => b.vault - a.vault);
+  const pageCount = Math.max(1, Math.ceil(others.length / HOUSES_PER_PAGE));
+  const cur = Math.min(page, pageCount - 1);
+  const shown = others.slice(cur * HOUSES_PER_PAGE, cur * HOUSES_PER_PAGE + HOUSES_PER_PAGE);
+
+  const row = (h: HouseView) => (
+    <div className="fx" key={h.pda} style={{ gridTemplateColumns: HOUSE_COLS }}>
+      <div className="fx-info">
+        <div className="fx-teams" style={{ fontSize: 14 }}>
+          {h.owner === myOwner ? "★ Your house" : `House ${h.pda.slice(0, 6)}…`}
+          {h.paused && <span style={{ color: "var(--stamp)" }}> · paused</span>}
+        </div>
+        <div className="fx-sub">
+          {policy(h)} · odds cap {(h.oddsCap / 1000).toFixed(0)}× · skew {h.skewCoeffBps}bps
+        </div>
+      </div>
+      <div className="pick" style={numCell}>{h.spreadBps}bps</div>
+      <div className="pick" style={numCell}>{fmtUsdc(h.vault)}</div>
+      <div className="pick" style={numCell}>{fmtUsdc(h.free)}</div>
+      <div className="pick" style={numCell}>{fmtUsdc(h.locked)}</div>
+    </div>
+  );
+
   return (
     <section className="sec">
       <p className="eyebrow">All houses</p>
@@ -770,34 +809,28 @@ function AllHouses({
         <div className="empty">No houses yet.</div>
       ) : (
         <div className="coupon">
-          <div className="coupon-head" style={{ gridTemplateColumns: "1fr 70px 90px 90px 90px" }}>
+          <div className="coupon-head" style={{ gridTemplateColumns: HOUSE_COLS }}>
             <div>House</div>
             <div>Spread</div>
             <div>Vault</div>
             <div>Free</div>
             <div>Locked</div>
           </div>
-          {houses.map((h) => (
-            <div
-              className="fx"
-              key={h.pda}
-              style={{ gridTemplateColumns: "1fr 70px 90px 90px 90px" }}
-            >
-              <div className="fx-info">
-                <div className="fx-teams" style={{ fontSize: 14 }}>
-                  {h.owner === myOwner ? "★ Your house" : `House ${h.pda.slice(0, 6)}…`}
-                  {h.paused && <span style={{ color: "var(--stamp)" }}> · paused</span>}
-                </div>
-                <div className="fx-sub">
-                  {policy(h)} · odds cap {(h.oddsCap / 1000).toFixed(0)}× · skew {h.skewCoeffBps}bps
-                </div>
-              </div>
-              <div className="pick" style={{ pointerEvents: "none" }}>{h.spreadBps}bps</div>
-              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.vault)}</div>
-              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.free)}</div>
-              <div className="pick" style={{ pointerEvents: "none" }}>{fmtUsdc(h.locked)}</div>
-            </div>
-          ))}
+          {mine && row(mine)}
+          {shown.map(row)}
+        </div>
+      )}
+      {pageCount > 1 && (
+        <div className="pager">
+          <button className="faucet" disabled={cur === 0} onClick={() => setPage(cur - 1)}>
+            ← prev
+          </button>
+          <span>
+            page {cur + 1} / {pageCount} · {others.length} other houses by size
+          </span>
+          <button className="faucet" disabled={cur >= pageCount - 1} onClick={() => setPage(cur + 1)}>
+            next →
+          </button>
         </div>
       )}
       <p className="annot">
