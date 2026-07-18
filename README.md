@@ -104,15 +104,33 @@ mainnet fork.
 
 ---
 
+## 📍 Live on devnet
+
+| | Address | Explorer |
+|---|---|---|
+| **Program** | `51bQ1HLbg7urERU7TU8E2KZsSnnniCLLmE9eTMetgH4A` | [view ↗](https://explorer.solana.com/address/51bQ1HLbg7urERU7TU8E2KZsSnnniCLLmE9eTMetgH4A?cluster=devnet) |
+| **Test USDC mint** | `5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y` | [view ↗](https://explorer.solana.com/address/5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y?cluster=devnet) |
+| **txoracle** (TxODDS) | `6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J` | [view ↗](https://explorer.solana.com/address/6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J?cluster=devnet) |
+| **Core house** (1M USDC pool) | `CCY2WbPtR9uibKZskMmq84NYCZQojHufWMTJ3RAgWnzU` | [view ↗](https://explorer.solana.com/address/CCY2WbPtR9uibKZskMmq84NYCZQojHufWMTJ3RAgWnzU?cluster=devnet) |
+
+---
+
 ## 🗺️ Roadmap
 
-- **💸 Cash out & trade your position.** Sell or offset an open bet *before*
-  settlement as the odds move — take profit, cut losses, or flip your side. The
-  house quotes a live buyback using the same oracle+skew engine, turning every
-  bet into a tradable position. *(The single most-wanted feature.)*
+- **💸 Cash out your position.** Sell an open bet back to its house *before*
+  settlement as the odds move — take profit or cut losses. The house quotes a
+  live buyback using the same oracle+skew engine (which also helps it
+  rebalance), turning every bet into a liquid position. *(The single
+  most-wanted feature — shipping first.)*
+- **🎰 Parlays / multi-leg bets** — combine outcomes across fixtures for
+  compounding odds.
+- **⚡ In-play (live) betting** — bet during the match against the in-running
+  oracle feed.
+- **📣 Referral / affiliate layer** — on top of the on-chain frontend fee, so
+  operators can grow and reward distribution.
 - **🚀 Mainnet launch** with production TxODDS credentials.
-- **📈 More markets:** Asian handicaps, over/under totals, both-teams-to-score,
-  parlays — beyond straight 1X2.
+- **📈 More markets:** Asian handicaps, over/under totals, both-teams-to-score
+  — beyond straight 1X2.
 - **🌍 More leagues & sports** across the full TxODDS coverage.
 - **🤝 Pooled houses (LP shares):** many LPs deposit into one book and share
   P&L pro-rata via tokenized shares — scaling liquidity beyond single owners.
