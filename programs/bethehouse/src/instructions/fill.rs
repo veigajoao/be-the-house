@@ -107,8 +107,15 @@ pub fn fill_bet(ctx: Context<FillBet>) -> Result<()> {
                     .ok_or(BthError::MathOverflow)?,
         BthError::OutsideCommitWindow
     );
+    // Target print: the freshest proven print the keeper found at/after the
+    // commit price, capped at target + tolerance. When the feed stays silent
+    // through the 15s window the keeper passes the commit print itself
+    // (target == commit) and we fill at the last proven price — trusting that
+    // TxODDS would have printed a new one if the market had actually moved.
+    // `min(commit, target)` in fill_odds preserves the worse-of-two anti-snipe
+    // whenever a genuinely fresher print does exist.
     require!(
-        target_print.ts >= bet.target_ts_ms
+        target_print.ts >= commit_print.ts
             && target_print.ts
                 <= bet
                     .target_ts_ms

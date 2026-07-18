@@ -129,6 +129,35 @@ describe("fill_bet (worse-of-two + house quote)", () => {
   });
 });
 
+describe("fill_bet fallback (last proven price during a feed lull)", () => {
+  it("fills at the commit print when no fresher target print exists", async () => {
+    // Feed silent through the 15s window -> the keeper supplies the commit
+    // print as the target too. Commit AT the later print P2 so it's the last
+    // proven price; worse-of-two(P2, P2) = P2. No post-target print needed.
+    const c = await commitOnPair(surfnet, m, PAIR, {
+      outcome: 2,
+      stakeUsdc: 10,
+      commitTsMs: P2.Ts,
+    });
+    await fillIx(m, c, PAIR, { commitPrintTs: P2.Ts, targetPrintTs: P2.Ts }).rpc();
+
+    const bet = await m.bettor.program.account.bet.fetch(c.bet);
+    expect(bet.state.active).toBeDefined();
+    // fair = min(2054, 2054) = 2054; spread 100 bps -> floor(2054 * 0.99) = 2033
+    expect(bet.fillOdds).toBe(2033);
+    expect(bet.fillTsMs.toNumber()).toBe(P2.Ts);
+  });
+
+  it("still rejects a target print OLDER than the commit print", async () => {
+    // The fallback relaxes the target's lower bound to commit_print.ts — never
+    // below it. A target staler than commit can never be used.
+    const c = await commitOnPair(surfnet, m, PAIR, { outcome: 0, commitTsMs: P2.Ts });
+    await expect(
+      fillIx(m, c, PAIR, { commitPrintTs: P2.Ts, targetPrintTs: P1.Ts }).rpc(),
+    ).rejects.toThrow(/OutsideTargetWindow/);
+  });
+});
+
 describe("fill_bet guards", () => {
   it("rejects a commit print outside the staleness window", async () => {
     const c = await commitOnPair(surfnet, m, PAIR, {

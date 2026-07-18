@@ -275,6 +275,10 @@ export function fillIx(
     houseVault: PublicKey;
     frontend: PublicKey;
     frontendFeeVault: PublicKey;
+    // Override which proven prints are supplied — used to exercise the
+    // fallback (target == commit) and the target-must-be-fresh-enough guard.
+    commitPrintTs: number;
+    targetPrintTs: number;
   }> = {},
 ) {
   return m.cranker.program.methods
@@ -290,7 +294,7 @@ export function fillIx(
       frontend: opts.frontend ?? m.frontend,
       frontendFeeVault: opts.frontendFeeVault ?? m.frontendFeeVault,
       treasuryVault: m.protocol.treasury,
-      commitPrint: pda.print(pair.fixtureId, pair.commitPrint.raw.odds.Ts),
-      targetPrint: pda.print(pair.fixtureId, pair.targetPrint.raw.odds.Ts),
+      commitPrint: pda.print(pair.fixtureId, opts.commitPrintTs ?? pair.commitPrint.raw.odds.Ts),
+      targetPrint: pda.print(pair.fixtureId, opts.targetPrintTs ?? pair.targetPrint.raw.odds.Ts),
     });
 }

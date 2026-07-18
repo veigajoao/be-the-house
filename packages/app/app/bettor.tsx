@@ -70,19 +70,20 @@ function Stub({
     foot =
       network === "devnet" ? (
         <>
-          <span className="ok">✓ Committed on-chain.</span> Your price locks against the next
-          devnet feed update after commit + 15s, then the verified fill lands. Quoting is bursty —
-          this can take a few minutes.
+          <span className="ok">✓ Committed on-chain.</span> Fills 15s after commit at the last
+          oracle price — or a worse one if the feed prints a fresh update in that window (never a
+          better one). The verified fill lands once the keeper cranks; a few minutes on devnet.
         </>
       ) : network === "surfnet" ? (
         <>
-          <span className="ok">✓ Committed on-chain.</span> Locks against the first print after
-          commit + 15s; the keeper fills once its batch root publishes.
+          <span className="ok">✓ Committed on-chain.</span> Fills 15s after commit at the last proven
+          price (or a fresher print if one lands), once the keeper cranks.
         </>
       ) : (
         <>
-          <span className="ok">✓ Committed on-chain.</span> Locks against the print at commit + 15s;
-          the verified fill lands 0.5–5.5 min later. Nothing left to do.
+          <span className="ok">✓ Committed on-chain.</span> Fills 15s after commit at the last oracle
+          price — or a worse one if a fresh print lands in that window. The verified fill follows
+          shortly. Nothing left to do.
         </>
       );
   } else if (state === "active") {
@@ -121,7 +122,12 @@ function Stub({
   } else {
     stamp = { cls: "stamp refund", text: state === "voided" ? "Voided" : "Refunded" };
     oddsCell = "—";
-    foot = <>Stake returned automatically ({state === "voided" ? "match abandoned" : "oracle silence"}).</>;
+    foot = (
+      <>
+        Stake returned automatically (
+        {state === "voided" ? "match abandoned" : "no oracle price at commit"}).
+      </>
+    );
   }
 
   return (
