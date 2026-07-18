@@ -5,12 +5,70 @@
 //     match allow-or-deny) / pause / withdraw. All wallet-signed.
 //   All Houses — read-only aggregate: every house's spread, vault, exposure
 //     and published offer policy.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fmtOdds, fmtUsdc, type FixtureRow, type HouseView } from "../lib/types";
 import type { useBthWallet } from "../lib/wallet";
 
 type Wallet = ReturnType<typeof useBthWallet>;
 type FilterMode = "all" | "only" | "except";
+
+// ---- shared tx-flow primitives (pending spinner + scoped result note) ----
+type Msg = { kind: "ok" | "err"; text: string; scope: string };
+// which panel a given action's result note belongs under
+const ACTION_SCOPE: Record<string, string> = {
+  create: "create",
+  deposit: "vault",
+  withdraw: "vault",
+  setPaused: "vault",
+  setFilters: "filters",
+  updateParams: "settings",
+};
+type Act = (action: string, extra: Record<string, unknown>, guardError?: string | null) => void;
+
+/** A button that shows an inline spinner while ITS action is in flight, and is
+ * disabled whenever ANY action is in flight (prevents double-submits). */
+function ActBtn({
+  className,
+  pending,
+  action,
+  idle,
+  busyLabel = "confirm in wallet…",
+  disabled = false,
+  onClick,
+}: {
+  className: string;
+  pending: string | null;
+  action: string;
+  idle: ReactNode;
+  busyLabel?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button className={className} disabled={disabled || pending !== null} onClick={onClick}>
+      {pending === action ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span className="spinner" /> {busyLabel}
+        </span>
+      ) : (
+        idle
+      )}
+    </button>
+  );
+}
+
+/** Result/error note, shown only under the panel that owns the action. */
+function Note({ msg, scope }: { msg: Msg | null; scope: string }) {
+  if (!msg || msg.scope !== scope) return null;
+  return (
+    <div
+      className="annot"
+      style={{ marginTop: 10, color: msg.kind === "err" ? "var(--stamp)" : "var(--green)" }}
+    >
+      {msg.text}
+    </div>
+  );
+}
 
 const DEFAULT_PARAMS = {
   spreadBps: 150,
@@ -62,16 +120,18 @@ function policyToFilters(p: PolicyState) {
 
 export default function House({
   wallet,
+  usdcBalance,
   onBalanceChange,
 }: {
   wallet: Wallet;
+  usdcBalance: number; // base units (µUSDC) of the connected wallet
   onBalanceChange?: () => void;
 }) {
   const [view, setView] = useState<"mine" | "all">("mine");
   const [houses, setHouses] = useState<HouseView[]>([]);
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [pending, setPending] = useState<string | null>(null); // action in flight
+  const [msg, setMsg] = useState<Msg | null>(null);
   const owner = wallet.address;
 
   const poll = useCallback(async () => {
@@ -95,14 +155,36 @@ export default function House({
 
   const myHouse = owner ? houses.find((h) => h.owner === owner) ?? null : null;
 
-  /** Build (server) → wallet-sign → refresh. */
-  async function act(action: string, extra: Record<string, unknown>) {
+  const SUCCESS: Record<string, string> = {
+    create: "✓ House created and funded.",
+    deposit: "✓ Deposit confirmed.",
+    withdraw: "✓ Withdrawal confirmed.",
+    setPaused: "✓ Saved.",
+    setFilters: "✓ Offer policy saved.",
+    updateParams: "✓ Parameters saved.",
+  };
+  const humanize = (e: unknown): string => {
+    const raw = (e as Error)?.message ?? "";
+    if (/reject|denied|declined|cancel|user.*abort/i.test(raw)) return "Cancelled in your wallet.";
+    if (/insufficient|debit an account|0x1\b|not enough/i.test(raw))
+      return "Transaction failed — not enough funds for this amount.";
+    return raw.slice(0, 160) || "Transaction failed. Please try again.";
+  };
+
+  /** Validate (client-side) → build (server) → wallet-sign → refresh. A truthy
+   * guardError short-circuits with an inline message before anything is sent. */
+  async function act(action: string, extra: Record<string, unknown>, guardError?: string | null) {
     if (!owner) {
       wallet.connect();
       return;
     }
-    setBusy(true);
-    setMsg("");
+    const scope = ACTION_SCOPE[action] ?? action;
+    if (guardError) {
+      setMsg({ kind: "err", text: guardError, scope });
+      return;
+    }
+    setPending(action);
+    setMsg(null);
     try {
       const res = await fetch("/api/house", {
         method: "POST",
@@ -112,14 +194,13 @@ export default function House({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "failed");
       await wallet.sign(body.tx);
-      setMsg("✓ saved");
+      setMsg({ kind: "ok", text: SUCCESS[action] ?? "✓ Saved.", scope });
       setTimeout(poll, 1200);
       onBalanceChange?.(); // create/deposit/withdraw move USDC — refresh the chip
-
     } catch (e) {
-      setMsg((e as Error).message.slice(0, 160));
+      setMsg({ kind: "err", text: humanize(e), scope });
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   }
 
@@ -146,12 +227,19 @@ export default function House({
           <MyHouse
             house={myHouse}
             fixtures={fixtures}
-            busy={busy || wallet.busy}
+            pending={pending}
             msg={msg}
+            usdcBalance={usdcBalance}
             act={act}
           />
         ) : (
-          <CreateHouse fixtures={fixtures} busy={busy || wallet.busy} msg={msg} act={act} />
+          <CreateHouse
+            fixtures={fixtures}
+            pending={pending}
+            msg={msg}
+            usdcBalance={usdcBalance}
+            act={act}
+          />
         )
       ) : (
         <AllHouses houses={houses} fixtures={fixtures} myOwner={owner} />
@@ -223,18 +311,27 @@ function OfferPolicyFields({
 // ---------- create ----------
 function CreateHouse({
   fixtures,
-  busy,
+  pending,
   msg,
+  usdcBalance,
   act,
 }: {
   fixtures: FixtureRow[];
-  busy: boolean;
-  msg: string;
-  act: (a: string, e: Record<string, unknown>) => void;
+  pending: string | null;
+  msg: Msg | null;
+  usdcBalance: number;
+  act: Act;
 }) {
   const [deposit, setDeposit] = useState("10000");
   const [p, setP] = useState(DEFAULT_PARAMS);
   const [policy, setPolicy] = useState<PolicyState>(OPEN_POLICY);
+  const depNum = Number(deposit.replace(/,/g, "")) || 0;
+  const depGuard =
+    depNum <= 0
+      ? "Enter a deposit amount."
+      : depNum * 1e6 > usdcBalance
+        ? `You only have ${fmtUsdc(usdcBalance)} USDC — deposit that or less.`
+        : null;
   return (
     <section className="sec">
       <p className="eyebrow">Create your house</p>
@@ -280,21 +377,27 @@ function CreateHouse({
             </div>
             <OfferPolicyFields fixtures={fixtures} policy={policy} setPolicy={setPolicy} />
           </div>
-          <button
-            className="btn"
-            disabled={busy}
-            onClick={() =>
-              act("create", {
-                params: p,
-                amountUsdc: Number(deposit),
-                filters: isOpenPolicy(policy) ? undefined : policyToFilters(policy),
-              })
-            }
-            style={{ marginTop: 14 }}
-          >
-            {busy ? "approve in wallet…" : "Create house + deposit"}
-          </button>
-          {msg && <div className="annot" style={{ marginTop: 10 }}>{msg}</div>}
+          <div style={{ marginTop: 14 }}>
+            <ActBtn
+              className="btn"
+              pending={pending}
+              action="create"
+              busyLabel="creating house…"
+              idle="Create house + deposit"
+              onClick={() =>
+                act(
+                  "create",
+                  {
+                    params: p,
+                    amountUsdc: depNum,
+                    filters: isOpenPolicy(policy) ? undefined : policyToFilters(policy),
+                  },
+                  depGuard,
+                )
+              }
+            />
+          </div>
+          <Note msg={msg} scope="create" />
         </div>
       </div>
     </section>
@@ -305,38 +408,57 @@ function CreateHouse({
 function MyHouse({
   house,
   fixtures,
-  busy,
+  pending,
   msg,
+  usdcBalance,
   act,
 }: {
   house: HouseView;
   fixtures: FixtureRow[];
-  busy: boolean;
-  msg: string;
-  act: (a: string, e: Record<string, unknown>) => void;
+  pending: string | null;
+  msg: Msg | null;
+  usdcBalance: number;
+  act: Act;
 }) {
   return (
     <div className="grid2">
       <div>
-        <VaultPanel house={house} busy={busy} act={act} />
-        <FiltersPanel house={house} fixtures={fixtures} busy={busy} act={act} />
+        <VaultPanel house={house} pending={pending} msg={msg} usdcBalance={usdcBalance} act={act} />
+        <FiltersPanel house={house} fixtures={fixtures} pending={pending} msg={msg} act={act} />
         <ExposurePanel house={house} fixtures={fixtures} />
       </div>
-      <SettingsPanel house={house} busy={busy} msg={msg} act={act} />
+      <SettingsPanel house={house} pending={pending} msg={msg} act={act} />
     </div>
   );
 }
 
 function VaultPanel({
   house,
-  busy,
+  pending,
+  msg,
+  usdcBalance,
   act,
 }: {
   house: HouseView;
-  busy: boolean;
-  act: (a: string, e: Record<string, unknown>) => void;
+  pending: string | null;
+  msg: Msg | null;
+  usdcBalance: number;
+  act: Act;
 }) {
   const [amount, setAmount] = useState("1000");
+  const amtNum = Number(amount.replace(/,/g, "")) || 0;
+  const depGuard =
+    amtNum <= 0
+      ? "Enter an amount."
+      : amtNum * 1e6 > usdcBalance
+        ? `You only have ${fmtUsdc(usdcBalance)} USDC.`
+        : null;
+  const wdGuard =
+    amtNum <= 0
+      ? "Enter an amount."
+      : amtNum * 1e6 > house.free
+        ? `Only ${fmtUsdc(house.free)} USDC is free to withdraw.`
+        : null;
   const total = Math.max(house.vault, 1);
   const pct = (n: number) => `${Math.max(0, (n / total) * 100)}%`;
   return (
@@ -375,16 +497,32 @@ function VaultPanel({
             <span>USDC</span>
             <input value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
-          <button className="faucet" disabled={busy} onClick={() => act("deposit", { amountUsdc: Number(amount) })}>
-            Deposit
-          </button>
-          <button className="faucet" disabled={busy} onClick={() => act("withdraw", { amountUsdc: Number(amount) })}>
-            Withdraw
-          </button>
-          <button className="faucet" disabled={busy} onClick={() => act("setPaused", { paused: !house.paused })}>
-            {house.paused ? "Unpause" : "Pause"}
-          </button>
+          <ActBtn
+            className="faucet"
+            pending={pending}
+            action="deposit"
+            busyLabel="depositing…"
+            idle="Deposit"
+            onClick={() => act("deposit", { amountUsdc: amtNum }, depGuard)}
+          />
+          <ActBtn
+            className="faucet"
+            pending={pending}
+            action="withdraw"
+            busyLabel="withdrawing…"
+            idle="Withdraw"
+            onClick={() => act("withdraw", { amountUsdc: amtNum }, wdGuard)}
+          />
+          <ActBtn
+            className="faucet"
+            pending={pending}
+            action="setPaused"
+            busyLabel="…"
+            idle={house.paused ? "Unpause" : "Pause"}
+            onClick={() => act("setPaused", { paused: !house.paused })}
+          />
         </div>
+        <Note msg={msg} scope="vault" />
       </div>
     </section>
   );
@@ -393,13 +531,15 @@ function VaultPanel({
 function FiltersPanel({
   house,
   fixtures,
-  busy,
+  pending,
+  msg,
   act,
 }: {
   house: HouseView;
   fixtures: FixtureRow[];
-  busy: boolean;
-  act: (a: string, e: Record<string, unknown>) => void;
+  pending: string | null;
+  msg: Msg | null;
+  act: Act;
 }) {
   const [policy, setPolicy] = useState<PolicyState>(policyFromFilters(house.filters));
   return (
@@ -412,14 +552,17 @@ function FiltersPanel({
           open.
         </div>
         <OfferPolicyFields fixtures={fixtures} policy={policy} setPolicy={setPolicy} />
-        <button
-          className="btn"
-          disabled={busy}
-          onClick={() => act("setFilters", { filters: policyToFilters(policy) })}
-          style={{ marginTop: 16 }}
-        >
-          {busy ? "approve in wallet…" : "Save offer policy"}
-        </button>
+        <div style={{ marginTop: 16 }}>
+          <ActBtn
+            className="btn"
+            pending={pending}
+            action="setFilters"
+            busyLabel="saving…"
+            idle="Save offer policy"
+            onClick={() => act("setFilters", { filters: policyToFilters(policy) })}
+          />
+        </div>
+        <Note msg={msg} scope="filters" />
       </div>
     </section>
   );
@@ -443,14 +586,14 @@ function ModeSelect({ mode, onChange }: { mode: FilterMode; onChange: (m: Filter
 
 function SettingsPanel({
   house,
-  busy,
+  pending,
   msg,
   act,
 }: {
   house: HouseView;
-  busy: boolean;
-  msg: string;
-  act: (a: string, e: Record<string, unknown>) => void;
+  pending: string | null;
+  msg: Msg | null;
+  act: Act;
 }) {
   const [p, setP] = useState({
     spreadBps: house.spreadBps,
@@ -464,10 +607,15 @@ function SettingsPanel({
       <p className="eyebrow">Parameters</p>
       <div className="panel form">
         <ParamSliders p={p} setP={setP} />
-        <button className="btn" disabled={busy} onClick={() => act("updateParams", { params: p })}>
-          {busy ? "approve in wallet…" : "Save parameters"}
-        </button>
-        {msg && <div className="annot" style={{ marginTop: 10 }}>{msg}</div>}
+        <ActBtn
+          className="btn"
+          pending={pending}
+          action="updateParams"
+          busyLabel="saving…"
+          idle="Save parameters"
+          onClick={() => act("updateParams", { params: p })}
+        />
+        <Note msg={msg} scope="settings" />
         <p className="annot" style={{ marginTop: 12 }}>
           Params apply to future fills only. Tighter spread wins more routed flow; odds cap reserves
           ${(p.oddsCap / 1000).toFixed(2)} per $1 staked until a bet fills.
