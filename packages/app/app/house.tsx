@@ -230,6 +230,23 @@ function CreateHouse({
   return (
     <section className="sec">
       <p className="eyebrow">Create your house</p>
+
+      <div className="house-intro">
+        <h3>What it means to be the house</h3>
+        <p>
+          You&apos;re opening a book. Bettors bet <b>against your vault</b>: you keep the losing
+          stakes and pay out the winners. Your profit is the <b>spread</b> — a small margin baked
+          into every price you quote — which makes you money in the long run across many bets, the
+          same way a bookmaker&apos;s edge does.
+        </p>
+        <p>
+          The oracle sets the fair price; you only choose <b>how much edge to take</b>, <b>how
+          hard to auto-balance</b> your book, and <b>how much you&apos;ll risk</b> per game. You
+          can&apos;t go bust — the protocol pre-funds every payout from your vault, and you withdraw
+          the free (unlocked) part whenever you like. The knobs below are your risk controls.
+        </p>
+      </div>
+
       <div className="grid2">
         <div className="panel form">
           <ParamSliders p={p} setP={setP} />
@@ -460,6 +477,7 @@ function ParamSliders({
   setP: (p: typeof DEFAULT_PARAMS) => void;
 }) {
   const set = (k: keyof typeof DEFAULT_PARAMS, v: number) => setP({ ...p, [k]: v });
+  const pct = (bps: number) => (bps / 100).toFixed(bps % 100 ? 2 : 0);
   return (
     <>
       <label>
@@ -468,6 +486,12 @@ function ParamSliders({
         </span>
         <input type="range" min={20} max={600} step={10} value={p.spreadBps}
           onChange={(e) => set("spreadBps", Number(e.target.value))} />
+        <div className="phelp">
+          Your <b>profit margin</b> on every fill — {p.spreadBps} bps = you quote {pct(p.spreadBps)}%
+          below the fair price and keep the difference. <b>Lower</b> → you win more bets (you&apos;re
+          competing with other houses on price) at a thinner margin; <b>higher</b> → more profit per
+          bet, less flow. <span className="hint">typical 50–300 bps</span>
+        </div>
       </label>
       <label>
         <span className="lab">
@@ -475,6 +499,12 @@ function ParamSliders({
         </span>
         <input type="range" min={0} max={10000} step={100} value={p.skewCoeffBps}
           onChange={(e) => set("skewCoeffBps", Number(e.target.value))} />
+        <div className="phelp">
+          <b>Auto-balances your book.</b> When bets pile onto one outcome, your price on that side
+          worsens to push new flow to the other side. <b>Higher</b> → rebalances harder (safer, but
+          your odds go uncompetitive sooner). <b>0</b> → you&apos;re happy holding one-sided risk.{" "}
+          <span className="hint">start ~2000</span>
+        </div>
       </label>
       <label>
         <span className="lab">
@@ -482,7 +512,13 @@ function ParamSliders({
         </span>
         <input type="range" min={2000} max={25000} step={500} value={p.oddsCap}
           onChange={(e) => set("oddsCap", Number(e.target.value))} />
-        <div className="readout">Reserves ${(p.oddsCap / 1000).toFixed(2)} per $1 staked until fill.</div>
+        <div className="phelp">
+          The most you&apos;ll ever pay per $1 staked — and the collateral <b>locked per pending
+          bet</b> (<span className="hint">reserves ${(p.oddsCap / 1000).toFixed(2)} per $1 until it
+          fills</span>). <b>Lower</b> → capital-efficient but you can&apos;t quote big underdogs;{" "}
+          <b>higher</b> → quote long shots but tie up cash. <span className="hint">1X2 rarely needs
+          &gt; 8×</span>
+        </div>
       </label>
       <label>
         <span className="lab">
@@ -490,6 +526,11 @@ function ParamSliders({
         </span>
         <input type="text" value={p.maxRiskPerFixtureUsdc}
           onChange={(e) => set("maxRiskPerFixtureUsdc", Number(e.target.value) || 0)} />
+        <div className="phelp">
+          Most you can lose (net) on a <b>single match</b>, in USDC — also the denominator that sets
+          how fast skew kicks in (smaller = more defensive). <span className="hint">keep it well
+          under your deposit</span>
+        </div>
       </label>
       <label>
         <span className="lab">
@@ -497,6 +538,10 @@ function ParamSliders({
         </span>
         <input type="text" value={p.maxTotalRiskUsdc}
           onChange={(e) => set("maxTotalRiskUsdc", Number(e.target.value) || 0)} />
+        <div className="phelp">
+          Total you can have locked <b>across all matches</b> at once — your overall book size.{" "}
+          <span className="hint">set it near your deposit</span>
+        </div>
       </label>
     </>
   );
