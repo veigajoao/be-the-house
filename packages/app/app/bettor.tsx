@@ -35,33 +35,50 @@ function countdown(ms: number): string {
   return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
 }
 
-function Stub({ bet, result }: { bet: BetView; result: { score: number[]; scoresRoot: string } | null }) {
+function Stub({
+  bet,
+  result,
+  network,
+}: {
+  bet: BetView;
+  result: { score: number[]; scoresRoot: string } | null;
+  network: AppConfig["network"];
+}) {
   const now = Date.now();
   const quoted = ceilings.get(bet.pda);
   const state = bet.state;
-  const committed = state === "pending" && now < bet.targetTsMs + 3_000;
-  const locked = state === "pending" && !committed;
+  // 15s commit delay has passed — waiting on the feed to print the target.
+  const pastDelay = state === "pending" && now > bet.targetTsMs;
 
   let stamp: { cls: string; text: string };
   let foot: React.ReactNode;
   let oddsCell: string;
   let winCell = "—";
 
-  if (committed) {
-    stamp = { cls: "stamp wait", text: "Committed" };
-    foot = <>Locking your price against the next feed print — about 15 seconds.</>;
+  if (state === "pending") {
+    stamp = { cls: "stamp wait", text: pastDelay ? "Awaiting fill" : "Committed" };
     oddsCell = quoted ? `up to ${fmtOdds(quoted.ceiling)}` : "up to —";
     if (quoted) winCell = fmtUsdc((bet.stake * quoted.ceiling) / 1000);
-  } else if (locked) {
-    stamp = { cls: "stamp ok", text: "Odds locked" };
-    oddsCell = quoted ? `≤ ${fmtOdds(quoted.ceiling)}` : "locked";
-    foot = (
-      <>
-        <span className="ok">✓ Price fixed at the T+15s print.</span> On-chain proof lands in
-        0.5–5.5 min. Nothing left to do.
-      </>
-    );
-    if (quoted) winCell = fmtUsdc((bet.stake * quoted.ceiling) / 1000);
+    // the price locks against the FIRST feed print after commit+15s — on
+    // devnet that's the next quote update, not a fixed 15s.
+    foot =
+      network === "devnet" ? (
+        <>
+          <span className="ok">✓ Committed on-chain.</span> Your price locks against the next
+          devnet feed update after commit + 15s, then the verified fill lands. Quoting is bursty —
+          this can take a few minutes.
+        </>
+      ) : network === "surfnet" ? (
+        <>
+          <span className="ok">✓ Committed on-chain.</span> Locks against the first print after
+          commit + 15s; the keeper fills once its batch root publishes.
+        </>
+      ) : (
+        <>
+          <span className="ok">✓ Committed on-chain.</span> Locks against the print at commit + 15s;
+          the verified fill lands 0.5–5.5 min later. Nothing left to do.
+        </>
+      );
   } else if (state === "active") {
     stamp = { cls: "stamp ok", text: "Active" };
     oddsCell = fmtOdds(bet.fillOdds);
@@ -396,7 +413,12 @@ export default function Bettor({
         ) : (
           <div className="stubs">
             {bets.map((b) => (
-              <Stub key={b.pda} bet={b} result={results[b.fixtureId] ?? null} />
+              <Stub
+                key={b.pda}
+                bet={b}
+                result={results[b.fixtureId] ?? null}
+                network={config?.network ?? "mainnet"}
+              />
             ))}
           </div>
         )}

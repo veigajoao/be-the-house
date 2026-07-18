@@ -74,6 +74,7 @@ export interface AppConfig {
   frontendFeeBps: number;
   keeperReward: number;
   programId: string;
+  network: "mainnet" | "devnet" | "surfnet";
   // timing windows (ms) — deployment-specific (tight mainnet spec vs widened devnet)
   commitDelayMs: number;
   stalenessWindowMs: number;
