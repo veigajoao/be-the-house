@@ -15,6 +15,7 @@ import {
   type Quotes,
 } from "../lib/types";
 import type { useBthWallet } from "../lib/wallet";
+import { chargeForStake, feeModel, feesOnStake, stakeForCharge, type FeeModel } from "../lib/fees";
 
 const API = "/api"; // same-origin route handlers (Vercel-ready, no CORS)
 
@@ -39,13 +40,18 @@ function Stub({
   bet,
   result,
   network,
+  fees,
 }: {
   bet: BetView;
   result: { score: number[]; scoresRoot: string } | null;
   network: AppConfig["network"];
+  fees: FeeModel | null;
 }) {
   const now = Date.now();
   const quoted = ceilings.get(bet.pda);
+  // What the bettor was actually charged (fee-inclusive) — bet.stake is the
+  // net at-risk amount; add the fees back to show the headline they paid.
+  const chargedUusdc = fees ? chargeForStake(bet.stake, fees) : bet.stake;
   const state = bet.state;
   // 15s commit delay has passed — waiting on the feed to print the target.
   const pastDelay = state === "pending" && now > bet.targetTsMs;
@@ -131,7 +137,7 @@ function Stub({
       <div className="stub-fig">
         <div>
           <small>Stake</small>
-          <b>{fmtUsdc(bet.stake)}</b>
+          <b>{fmtUsdc(chargedUusdc)}</b>
         </div>
         <div>
           <small>Odds</small>
@@ -296,7 +302,7 @@ export default function Bettor({
         body: JSON.stringify({
           fixtureId: pick.fixture.FixtureId,
           outcome: pick.outcome,
-          stakeUsdc: Number(stake),
+          stakeUsdc: Number(stake.replace(/,/g, "")) || 0, // fee-inclusive spend
           bettor: wallet.address,
         }),
       });
@@ -321,10 +327,20 @@ export default function Bettor({
     }
   }
 
-  const stakeNum = Number(stake.replace(/,/g, "")) || 0;
   const pickBest = pick ? bestFor(pick.quotes, pick.outcome) : null;
-  const feFee = config ? (stakeNum * config.frontendFeeBps) / 10_000 : 0;
-  const pFee = config ? (stakeNum * config.protocolFeeBps) / 10_000 : 0;
+  // The typed amount is the fee-INCLUSIVE total charged. Invert it to the stake
+  // that actually rides (fees come out of it, not on top), so every figure below
+  // — breakdown and "to win" — is computed on the real at-risk amount.
+  const spendUsdc = Number(stake.replace(/,/g, "")) || 0;
+  const fees = config ? feeModel(config) : null;
+  const spendUusdc = Math.round(spendUsdc * 1e6);
+  const netStakeUusdc = fees ? stakeForCharge(spendUusdc, fees) : 0;
+  const breakdown = fees ? feesOnStake(netStakeUusdc, fees) : null;
+  const tooSmall = spendUsdc > 0 && netStakeUusdc <= 0;
+  const toWinUusdc =
+    pickBest && netStakeUusdc > 0
+      ? Math.floor((netStakeUusdc * pickBest.effOdds[pick!.outcome]) / 1000)
+      : 0;
 
   return (
     <>
@@ -418,6 +434,7 @@ export default function Bettor({
                 bet={b}
                 result={results[b.fixtureId] ?? null}
                 network={config?.network ?? "mainnet"}
+                fees={fees}
               />
             ))}
           </div>
@@ -474,17 +491,28 @@ export default function Bettor({
                 inputMode="decimal"
                 value={stake}
                 onChange={(e) => setStake(e.target.value)}
-                aria-label="Stake"
+                aria-label="Amount to spend"
               />
+            </div>
+            <div className="fieldnote">
+              All-in — fees come out of this, nothing extra is charged.
             </div>
             <div className="rows">
               <div className="row">
-                <em>Frontend fee ({config?.frontendFeeBps ?? "—"} bps)</em>
-                <b>{feFee.toFixed(2)}</b>
+                <em>Staked (rides on the bet)</em>
+                <b>{breakdown ? fmtUsdc(netStakeUusdc) : "—"}</b>
               </div>
-              <div className="row">
+              <div className="row sub">
+                <em>Frontend fee ({config?.frontendFeeBps ?? "—"} bps)</em>
+                <b>{breakdown ? fmtUsdc(breakdown.frontend) : "—"}</b>
+              </div>
+              <div className="row sub">
                 <em>Protocol fee ({config?.protocolFeeBps ?? "—"} bps)</em>
-                <b>{pFee.toFixed(2)}</b>
+                <b>{breakdown ? fmtUsdc(breakdown.protocol) : "—"}</b>
+              </div>
+              <div className="row sub">
+                <em>Keeper reward (fills your bet)</em>
+                <b>{breakdown ? fmtUsdc(breakdown.keeper) : "—"}</b>
               </div>
               <div className="row">
                 <em>Routed to</em>
@@ -492,21 +520,28 @@ export default function Bettor({
               </div>
               <div className="row big">
                 <em>To win</em>
-                <b>
-                  {pickBest
-                    ? ((stakeNum * pickBest.effOdds[pick.outcome]) / 1000).toFixed(2)
-                    : "0.00"}
-                </b>
+                <b>{pickBest && toWinUusdc > 0 ? fmtUsdc(toWinUusdc) : "0.00"}</b>
               </div>
             </div>
-            <button className="btn" disabled={placing || wallet.busy || !pickBest} onClick={place}>
+            <button
+              className="btn"
+              disabled={placing || wallet.busy || !pickBest || tooSmall}
+              onClick={place}
+            >
               {placing || wallet.busy
                 ? "Approve in your wallet…"
                 : wallet.connected
                   ? "Place bet"
                   : "Connect wallet to bet"}
             </button>
-            <div className="guar">✓ Guaranteed fill — no slippage, no partial fills</div>
+            {tooSmall ? (
+              <div className="guar" style={{ color: "var(--stamp)" }}>
+                Too small — the {fees ? fmtUsdc(fees.keeperUusdc) : "—"} USDC keeper fee would eat it
+                all. Bet a bit more.
+              </div>
+            ) : (
+              <div className="guar">✓ Guaranteed fill — no slippage, no partial fills</div>
+            )}
             {error && (
               <div className="annot" style={{ marginTop: 10 }}>
                 {error}
