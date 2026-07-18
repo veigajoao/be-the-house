@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import "./globals.css";
-import { Providers } from "./providers";
 
-export const metadata = { title: "BeTheHouse — permissionless sportsbook" };
+export const metadata = {
+  title: "BeTheHouse — permissionless on-chain sportsbook",
+  description:
+    "Anyone can be the house. Bettors commit blind to the TxODDS StablePrice; fills and settlements are verified on-chain with Merkle proofs. No trusted party.",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -15,9 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-      <body>
-        <Providers>{children}</Providers>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
