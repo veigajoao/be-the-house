@@ -152,10 +152,10 @@ export default function App() {
       </div>
 
       <div hidden={tab !== "bet"}>
-        <Bettor config={config} wallet={wallet} />
+        <Bettor config={config} wallet={wallet} onBalanceChange={balance.refresh} />
       </div>
       <div hidden={tab !== "house"}>
-        <House wallet={wallet} />
+        <House wallet={wallet} onBalanceChange={balance.refresh} />
       </div>
 
       <WalletPicker wallet={wallet} />

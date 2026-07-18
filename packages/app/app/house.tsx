@@ -60,7 +60,13 @@ function policyToFilters(p: PolicyState) {
   };
 }
 
-export default function House({ wallet }: { wallet: Wallet }) {
+export default function House({
+  wallet,
+  onBalanceChange,
+}: {
+  wallet: Wallet;
+  onBalanceChange?: () => void;
+}) {
   const [view, setView] = useState<"mine" | "all">("mine");
   const [houses, setHouses] = useState<HouseView[]>([]);
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
@@ -108,6 +114,8 @@ export default function House({ wallet }: { wallet: Wallet }) {
       await wallet.sign(body.tx);
       setMsg("✓ saved");
       setTimeout(poll, 1200);
+      onBalanceChange?.(); // create/deposit/withdraw move USDC — refresh the chip
+
     } catch (e) {
       setMsg((e as Error).message.slice(0, 160));
     } finally {

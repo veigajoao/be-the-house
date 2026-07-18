@@ -206,9 +206,11 @@ function StubSkeleton() {
 export default function Bettor({
   config,
   wallet,
+  onBalanceChange,
 }: {
   config: AppConfig | null;
   wallet: ReturnType<typeof useBthWallet>;
+  onBalanceChange?: () => void;
 }) {
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
   const [quotes, setQuotes] = useState<Record<number, Quotes>>({});
@@ -320,6 +322,7 @@ export default function Bettor({
       });
       setPick(null);
       void poll();
+      onBalanceChange?.(); // the commit debited stake + fees — refresh the chip
     } catch (e) {
       setError((e as Error).message.slice(0, 180));
     } finally {
