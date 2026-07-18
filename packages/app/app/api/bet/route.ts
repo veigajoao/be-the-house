@@ -9,9 +9,12 @@ import { PublicKey } from "@solana/web3.js";
 import { USDC_MINT } from "@bethehouse/sdk";
 import { chain } from "../../../lib/server";
 import { getFixtures, getQuotes } from "../../../lib/market";
+import { chargeForStake, feeModel, stakeForCharge } from "../../../lib/fees";
 
 export async function POST(req: NextRequest) {
-  const { fixtureId, outcome, stakeUsdc, bettor: bettorStr } = (await req.json()) as {
+  // `spendUsdc` is the fee-INCLUSIVE amount the bettor wants charged. We invert
+  // it to the on-chain stake so the total debit equals the slip's headline.
+  const { fixtureId, outcome, stakeUsdc: spendUsdc, bettor: bettorStr } = (await req.json()) as {
     fixtureId: number;
     outcome: number;
     stakeUsdc: number;
@@ -21,7 +24,11 @@ export async function POST(req: NextRequest) {
   const bettor = new PublicKey(bettorStr);
   const { client } = chain();
 
-  const [fixtures, quotes] = await Promise.all([getFixtures(), getQuotes(fixtureId)]);
+  const [fixtures, quotes, config] = await Promise.all([
+    getFixtures(),
+    getQuotes(fixtureId),
+    (client.program.account as any).config.fetch(client.pdas.config()),
+  ]);
   const fixture = fixtures.find((f) => f.FixtureId === fixtureId);
   if (!fixture) return NextResponse.json({ error: "unknown fixture" }, { status: 404 });
   if (!quotes) return NextResponse.json({ error: "no live quotes" }, { status: 409 });
@@ -30,8 +37,21 @@ export async function POST(req: NextRequest) {
   if (!frontends.length) return NextResponse.json({ error: "no frontend" }, { status: 500 });
   const frontend = frontends[0].publicKey;
 
+  const fees = feeModel({
+    frontendFeeBps: frontends[0].account.feeBps,
+    protocolFeeBps: config.protocolFeeBps,
+    keeperReward: config.keeperReward.toNumber(),
+  });
+  const spendUusdc = Math.round(spendUsdc * 1_000_000);
+  const stakeUusdc = stakeForCharge(spendUusdc, fees);
+  if (stakeUusdc <= 0) {
+    return NextResponse.json(
+      { error: `Too small — the ${(fees.keeperUusdc / 1e6).toFixed(0)} USDC keeper fee eats it all. Bet a bit more.` },
+      { status: 400 },
+    );
+  }
+  const stake = new BN(stakeUusdc);
   const bettorToken = getAssociatedTokenAddressSync(USDC_MINT, bettor);
-  const stake = new BN(Math.round(stakeUsdc * 1_000_000));
   const { blockhash } = await client.connection.getLatestBlockhash();
 
   // Anchor custom error codes (see programs/bethehouse/src/errors.rs order).
@@ -44,7 +64,7 @@ export async function POST(req: NextRequest) {
   };
 
   let capacityBlocked = false;
-  let bestMaxStakeUsdc = 0; // largest stake any house could take on this fixture
+  let bestMaxSpendUsdc = 0; // largest fee-inclusive spend any house could take on this fixture
   const errors: string[] = [];
 
   for (const houseKey of quotes.best[outcome]) {
@@ -71,9 +91,12 @@ export async function POST(req: NextRequest) {
         vaultBal - houseAcc.totalLocked.toNumber(),
       ),
     );
-    // reserved = stake * odds_cap / 1000 ≤ capacity → stake ≤ capacity*1000/odds_cap
-    const maxStake = Math.floor((capacity * 1000) / houseAcc.oddsCap) / 1e6;
-    bestMaxStakeUsdc = Math.max(bestMaxStakeUsdc, maxStake);
+    // reserved = stake * odds_cap / 1000 ≤ capacity → stake ≤ capacity*1000/odds_cap.
+    // Report the fee-inclusive spend that maps to that max stake, so guidance
+    // matches what the bettor types into the box.
+    const maxStakeUusdc = Math.floor((capacity * 1000) / houseAcc.oddsCap);
+    const maxSpendUsdc = chargeForStake(maxStakeUusdc, fees) / 1e6;
+    bestMaxSpendUsdc = Math.max(bestMaxSpendUsdc, maxSpendUsdc);
 
     const nonce = new BN(Date.now() + Math.floor(Math.random() * 1_000_000));
     const betPda = client.pdas.bet(bettor, BigInt(nonce.toString()));
@@ -132,7 +155,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (capacityBlocked) {
-    const max = Math.floor(bestMaxStakeUsdc);
+    const max = Math.floor(bestMaxSpendUsdc);
     return NextResponse.json(
       {
         error:
