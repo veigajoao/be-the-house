@@ -68,6 +68,25 @@ export async function POST(req: NextRequest) {
             .instruction(),
         );
       }
+      // optional initial offer policy — set in the same tx (house exists by
+      // the time this instruction runs)
+      if (body.filters) {
+        const f = body.filters;
+        if (f.competitions.length > 16 || f.fixtures.length > 32) {
+          throw new Error("too many filter entries (max 16 competitions, 32 matches)");
+        }
+        tx.add(
+          await client.program.methods
+            .setHouseFilters(
+              f.competitionAllow,
+              f.competitions,
+              f.fixtureAllow,
+              f.fixtures.map((x) => new BN(String(x))),
+            )
+            .accounts({ owner, house })
+            .instruction(),
+        );
+      }
     } else if (body.action === "deposit") {
       tx.add(
         await client.program.methods

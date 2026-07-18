@@ -32,6 +32,34 @@ function ruleToMode(allow: boolean, listLen: number): FilterMode {
   return allow ? "only" : "except";
 }
 
+interface PolicyState {
+  compMode: FilterMode;
+  comps: number[];
+  fxMode: FilterMode;
+  fxs: string[];
+}
+const OPEN_POLICY: PolicyState = { compMode: "all", comps: [], fxMode: "all", fxs: [] };
+const policyFromFilters = (f: HouseView["filters"]): PolicyState =>
+  f
+    ? {
+        compMode: ruleToMode(f.competitionAllow, f.competitions.length),
+        comps: f.competitions,
+        fxMode: ruleToMode(f.fixtureAllow, f.fixtures.length),
+        fxs: f.fixtures,
+      }
+    : OPEN_POLICY;
+const isOpenPolicy = (p: PolicyState) => p.compMode === "all" && p.fxMode === "all";
+function policyToFilters(p: PolicyState) {
+  const c = modeToRule(p.compMode, p.comps);
+  const x = modeToRule(p.fxMode, p.fxs);
+  return {
+    competitionAllow: c.allow,
+    competitions: c.list as number[],
+    fixtureAllow: x.allow,
+    fixtures: x.list as string[],
+  };
+}
+
 export default function House({ wallet }: { wallet: Wallet }) {
   const [view, setView] = useState<"mine" | "all">("mine");
   const [houses, setHouses] = useState<HouseView[]>([]);
@@ -115,7 +143,7 @@ export default function House({ wallet }: { wallet: Wallet }) {
             act={act}
           />
         ) : (
-          <CreateHouse busy={busy || wallet.busy} msg={msg} act={act} />
+          <CreateHouse fixtures={fixtures} busy={busy || wallet.busy} msg={msg} act={act} />
         )
       ) : (
         <AllHouses houses={houses} fixtures={fixtures} myOwner={owner} />
@@ -124,18 +152,81 @@ export default function House({ wallet }: { wallet: Wallet }) {
   );
 }
 
+// ---------- reusable offer-policy editor ----------
+function OfferPolicyFields({
+  fixtures,
+  policy,
+  setPolicy,
+}: {
+  fixtures: FixtureRow[];
+  policy: PolicyState;
+  setPolicy: (p: PolicyState) => void;
+}) {
+  const competitions = useMemo(() => {
+    const m = new Map<number, string>();
+    fixtures.forEach((f) => m.set(f.CompetitionId, f.Competition));
+    return [...m.entries()].map(([id, name]) => ({ id, name }));
+  }, [fixtures]);
+  const toggle = <T,>(arr: T[], v: T) =>
+    arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+
+  return (
+    <>
+      <label>
+        <span className="lab">Competitions</span>
+        <ModeSelect mode={policy.compMode} onChange={(compMode) => setPolicy({ ...policy, compMode })} />
+      </label>
+      {policy.compMode !== "all" && (
+        <div className="filter-chips">
+          {competitions.map((c) => (
+            <button
+              key={c.id}
+              className={`chip ${policy.comps.includes(c.id) ? "on" : ""}`}
+              onClick={() => setPolicy({ ...policy, comps: toggle(policy.comps, c.id) })}
+            >
+              {c.name}
+            </button>
+          ))}
+          {competitions.length === 0 && <span className="annot">no competitions in the feed yet</span>}
+        </div>
+      )}
+
+      <label style={{ marginTop: 16 }}>
+        <span className="lab">Individual matches</span>
+        <ModeSelect mode={policy.fxMode} onChange={(fxMode) => setPolicy({ ...policy, fxMode })} />
+      </label>
+      {policy.fxMode !== "all" && (
+        <div className="filter-chips">
+          {fixtures.map((f) => (
+            <button
+              key={f.FixtureId}
+              className={`chip ${policy.fxs.includes(String(f.FixtureId)) ? "on" : ""}`}
+              onClick={() => setPolicy({ ...policy, fxs: toggle(policy.fxs, String(f.FixtureId)) })}
+            >
+              {f.Participant1} — {f.Participant2}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ---------- create ----------
 function CreateHouse({
+  fixtures,
   busy,
   msg,
   act,
 }: {
+  fixtures: FixtureRow[];
   busy: boolean;
   msg: string;
   act: (a: string, e: Record<string, unknown>) => void;
 }) {
   const [deposit, setDeposit] = useState("10000");
   const [p, setP] = useState(DEFAULT_PARAMS);
+  const [policy, setPolicy] = useState<PolicyState>(OPEN_POLICY);
   return (
     <section className="sec">
       <p className="eyebrow">Create your house</p>
@@ -143,22 +234,36 @@ function CreateHouse({
         <div className="panel form">
           <ParamSliders p={p} setP={setP} />
         </div>
-        <div className="panel form">
-          <label>
-            <span className="lab">
-              Initial deposit <b>{deposit} USDC</b>
-            </span>
-            <input type="text" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
-          </label>
-          <div className="readout">
-            You&apos;re the sole owner — only you can withdraw. The protocol pre-funds every payout
-            from this vault (vault ≥ locked, always), so your house can never go insolvent.
+        <div>
+          <div className="panel form">
+            <label>
+              <span className="lab">
+                Initial deposit <b>{deposit} USDC</b>
+              </span>
+              <input type="text" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
+            </label>
+            <div className="readout">
+              You&apos;re the sole owner — only you can withdraw. The protocol pre-funds every payout
+              from this vault (vault ≥ locked, always), so your house can never go insolvent.
+            </div>
+          </div>
+          <div className="panel form" style={{ marginTop: 20 }}>
+            <p className="lab" style={{ marginBottom: 10 }}>Offer policy (optional)</p>
+            <div className="readout" style={{ marginBottom: 12 }}>
+              Which markets your house quotes. Leave both on <b>Offer all</b> to take everything.
+              The match rule is enforced on-chain; competitions are applied by routing.
+            </div>
+            <OfferPolicyFields fixtures={fixtures} policy={policy} setPolicy={setPolicy} />
           </div>
           <button
             className="btn"
             disabled={busy}
             onClick={() =>
-              act("create", { params: p, amountUsdc: Number(deposit) })
+              act("create", {
+                params: p,
+                amountUsdc: Number(deposit),
+                filters: isOpenPolicy(policy) ? undefined : policyToFilters(policy),
+              })
             }
             style={{ marginTop: 14 }}
           >
@@ -271,37 +376,7 @@ function FiltersPanel({
   busy: boolean;
   act: (a: string, e: Record<string, unknown>) => void;
 }) {
-  const competitions = useMemo(() => {
-    const m = new Map<number, string>();
-    fixtures.forEach((f) => m.set(f.CompetitionId, f.Competition));
-    return [...m.entries()].map(([id, name]) => ({ id, name }));
-  }, [fixtures]);
-
-  const [compMode, setCompMode] = useState<FilterMode>(
-    ruleToMode(house.filters?.competitionAllow ?? false, house.filters?.competitions.length ?? 0),
-  );
-  const [comps, setComps] = useState<number[]>(house.filters?.competitions ?? []);
-  const [fxMode, setFxMode] = useState<FilterMode>(
-    ruleToMode(house.filters?.fixtureAllow ?? false, house.filters?.fixtures.length ?? 0),
-  );
-  const [fxs, setFxs] = useState<string[]>(house.filters?.fixtures ?? []);
-
-  const toggle = <T,>(arr: T[], v: T, set: (a: T[]) => void) =>
-    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
-
-  function save() {
-    const comp = modeToRule(compMode, comps);
-    const fx = modeToRule(fxMode, fxs);
-    act("setFilters", {
-      filters: {
-        competitionAllow: comp.allow,
-        competitions: comp.list as number[],
-        fixtureAllow: fx.allow,
-        fixtures: fx.list as string[],
-      },
-    });
-  }
-
+  const [policy, setPolicy] = useState<PolicyState>(policyFromFilters(house.filters));
   return (
     <section className="sec">
       <p className="eyebrow">Offer policy</p>
@@ -311,45 +386,13 @@ function FiltersPanel({
           commit; the <b>competition</b> rule is applied by routing. Default (offer all) leaves both
           open.
         </div>
-
-        <label>
-          <span className="lab">Competitions</span>
-          <ModeSelect mode={compMode} onChange={setCompMode} />
-        </label>
-        {compMode !== "all" && (
-          <div className="filter-chips">
-            {competitions.map((c) => (
-              <button
-                key={c.id}
-                className={`chip ${comps.includes(c.id) ? "on" : ""}`}
-                onClick={() => toggle(comps, c.id, setComps)}
-              >
-                {c.name}
-              </button>
-            ))}
-            {competitions.length === 0 && <span className="annot">no competitions in the feed yet</span>}
-          </div>
-        )}
-
-        <label style={{ marginTop: 16 }}>
-          <span className="lab">Individual matches</span>
-          <ModeSelect mode={fxMode} onChange={setFxMode} />
-        </label>
-        {fxMode !== "all" && (
-          <div className="filter-chips">
-            {fixtures.map((f) => (
-              <button
-                key={f.FixtureId}
-                className={`chip ${fxs.includes(String(f.FixtureId)) ? "on" : ""}`}
-                onClick={() => toggle(fxs, String(f.FixtureId), setFxs)}
-              >
-                {f.Participant1} — {f.Participant2}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <button className="btn" disabled={busy} onClick={save} style={{ marginTop: 16 }}>
+        <OfferPolicyFields fixtures={fixtures} policy={policy} setPolicy={setPolicy} />
+        <button
+          className="btn"
+          disabled={busy}
+          onClick={() => act("setFilters", { filters: policyToFilters(policy) })}
+          style={{ marginTop: 16 }}
+        >
           {busy ? "approve in wallet…" : "Save offer policy"}
         </button>
       </div>
