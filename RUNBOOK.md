@@ -131,7 +131,7 @@ cadence.
   ```bash
   cd packages/app && RPC_URL=... TXLINE_ENV=development SURFNET_MODE=false \
   TXORACLE_PROGRAM=6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J \
-  USDC_MINT=ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6 pnpm dev
+  USDC_MINT=5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y pnpm dev
   # keeper locally: hit the cron route on an interval
   while true; do curl -s http://127.0.0.1:3123/api/cron/keeper; sleep 20; done
   ```

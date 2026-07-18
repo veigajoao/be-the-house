@@ -13,7 +13,7 @@ import type { WalletSession } from "@solana/client";
 import { getBase64Encoder, getTransactionDecoder } from "@solana/kit";
 
 const USDC_MINT =
-  process.env.NEXT_PUBLIC_USDC_MINT ?? "ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6";
+  process.env.NEXT_PUBLIC_USDC_MINT ?? "5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y";
 
 export const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 

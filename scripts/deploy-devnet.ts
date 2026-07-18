@@ -13,7 +13,7 @@ dotenv({ path: resolve(ROOT, ".env") });
 
 // devnet identities — set BEFORE importing the sdk (read at module load)
 export const DEVNET_TXORACLE = "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J";
-export const DEVNET_USDC = process.env.DEVNET_USDC ?? "ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6";
+export const DEVNET_USDC = process.env.DEVNET_USDC ?? "5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y";
 process.env.TXORACLE_PROGRAM = DEVNET_TXORACLE;
 process.env.USDC_MINT = DEVNET_USDC;
 
@@ -65,9 +65,11 @@ if (await connection.getAccountInfo(configPda)) {
       maxFrontendFeeBps: 500,
       keeperReward: USDC(1),
       commitDelayMs: new anchor.BN(15_000),
-      stalenessWindowMs: new anchor.BN(120_000),
-      fillToleranceMs: new anchor.BN(90_000),
-      commitExpiryMs: new anchor.BN(3_600_000),
+      // Widened for devnet's bursty feed (prints can be ~50 min apart): the
+      // prove/fill windows and refund deadline must exceed the worst gap.
+      stalenessWindowMs: new anchor.BN(7_200_000), // 2h prove window
+      fillToleranceMs: new anchor.BN(7_200_000), // 2h fill window
+      commitExpiryMs: new anchor.BN(10_800_000), // 3h before refund
       voidAfterMs: new anchor.BN(3 * 86_400_000),
     })
     .accounts({
@@ -83,9 +85,10 @@ if (await connection.getAccountInfo(configPda)) {
 const adminAta = getAssociatedTokenAddressSync(usdcMint, admin.publicKey);
 await createAssociatedTokenAccountIdempotent(connection, admin, usdcMint, admin.publicKey);
 const bal = BigInt((await connection.getTokenAccountBalance(adminAta)).value.amount);
-if (bal < 10_000_000_000n) {
-  await mintTo(connection, admin, usdcMint, adminAta, admin, 20_000_000_000n); // 20k USDC
-  log("minted 20,000 test USDC to admin");
+if (bal < 1_000_000_000_000n) {
+  // 1.05M: 1M for the core pool + demo houses + a spare buffer to place bets
+  await mintTo(connection, admin, usdcMint, adminAta, admin, 1_050_000_000_000n);
+  log("minted 1,050,000 test USDC to admin");
 }
 
 // ---- 3. frontend ----
@@ -100,36 +103,41 @@ if (await connection.getAccountInfo(frontendPda)) {
   log("frontend registered (100 bps):", frontendPda.toBase58());
 }
 
-// ---- 4. houses: sharp (80 bps) + wide (300 bps) ----
-for (const [id, name, spread] of [
-  [1, "sharp", 80],
-  [2, "wide", 300],
-] as const) {
-  const housePda = client.pdas.house(admin.publicKey, id);
+// ---- 4. houses ----
+//   core (id 1): the main 1,000,000-USDC pool owned by the admin — deep enough
+//     to back any bet on the book. sharp/wide are small demo books for routing
+//     variety (best-price competition across houses).
+const HOUSES = [
+  { id: 1, name: "core", spread: 150, maxFixture: 200_000, maxTotal: 1_000_000, deposit: 1_000_000 },
+  { id: 2, name: "sharp", spread: 80, maxFixture: 2_000, maxTotal: 4_000, deposit: 4_000 },
+  { id: 3, name: "wide", spread: 300, maxFixture: 2_000, maxTotal: 4_000, deposit: 4_000 },
+] as const;
+for (const h of HOUSES) {
+  const housePda = client.pdas.house(admin.publicKey, h.id);
   if (await connection.getAccountInfo(housePda)) {
-    log(`house "${name}" already exists:`, housePda.toBase58());
+    log(`house "${h.name}" already exists:`, housePda.toBase58());
     continue;
   }
   await client.program.methods
-    .createHouse(id, {
-      spreadBps: spread,
+    .createHouse(h.id, {
+      spreadBps: h.spread,
       skewCoeffBps: 2_000,
       oddsCap: 15_000,
-      maxRiskPerFixture: USDC(2_000),
-      maxTotalRisk: USDC(4_000),
+      maxRiskPerFixture: USDC(h.maxFixture),
+      maxTotalRisk: USDC(h.maxTotal),
     })
     .accounts({ owner: admin.publicKey, usdcMint })
     .rpc();
   await client.program.methods
-    .deposit(USDC(4_000))
+    .deposit(USDC(h.deposit))
     .accounts({
       depositor: admin.publicKey,
       house: housePda,
-      vault: client.pdas.houseVault(admin.publicKey, id),
+      vault: client.pdas.houseVault(admin.publicKey, h.id),
       depositorToken: adminAta,
     })
     .rpc();
-  log(`house "${name}" created (${spread} bps) + 4,000 USDC deposited:`, housePda.toBase58());
+  log(`house "${h.name}" created (${h.spread} bps) + ${h.deposit.toLocaleString()} USDC deposited:`, housePda.toBase58());
 }
 
 log("");

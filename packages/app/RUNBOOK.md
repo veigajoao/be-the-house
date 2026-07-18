@@ -3,9 +3,9 @@
 
 | | |
 |---|---|
-| Program | `Au4V34qyUhMfAL9HfC3QLTtTi6Mua7WdqDYUdZqhEdGS` |
+| Program | `51bQ1HLbg7urERU7TU8E2KZsSnnniCLLmE9eTMetgH4A` |
 | Config | `F4DtpQ9B9xvRCcSZAfbi15kTmYMXzu5A4mDGTMKiT5e2` |
-| Test USDC mint | `ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6` (admin = mint authority; app faucet mints it) |
+| Test USDC mint | `5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y` (admin = mint authority; app faucet mints it) |
 | txoracle | `6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J` (devnet, publisher healthy @5-min cadence) |
 | Frontend (100 bps) | `2VHe4Bq6KomdVmkbLnwjT71nNVGbAZSRL4yqSqSoTJLg` |
 | House "sharp" 80 bps | `F63L4fZ8WidTxCzJed4Zer35QFRNEt9dSZq5CgtqQNNg` (4k USDC) |
@@ -17,12 +17,12 @@ Start the devnet stack (keeper/API then frontend):
 ```bash
 RPC_URL=https://api.devnet.solana.com SURFNET_MODE=false TXLINE_ENV=development \
 TXORACLE_PROGRAM=6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J \
-USDC_MINT=ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6 \
+USDC_MINT=5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y \
 npx tsx packages/api/src/index.ts
 
 cd packages/app && RPC_URL=https://api.devnet.solana.com \
 TXORACLE_PROGRAM=6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J \
-USDC_MINT=ETnaYN2P3WnH1ZRgCVPbGmNsZ3g7DuJwX8t77czxAyw6 \
+USDC_MINT=5Nr5hRv9wGWW4ChEtay5PjK4pdYXsVuCzh5JTYztW58Y \
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8787 pnpm dev
 ```
 
