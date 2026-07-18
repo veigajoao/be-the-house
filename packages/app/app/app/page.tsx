@@ -14,7 +14,6 @@ export default function App() {
   const [tab, setTab] = useState<"bet" | "house">("bet");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [fauceting, setFauceting] = useState(false);
-  const [airdropTo, setAirdropTo] = useState("");
   const [msg, setMsg] = useState("");
 
   const loadConfig = useCallback(async () => {
@@ -87,38 +86,16 @@ export default function App() {
                 <button className="faucet" onClick={wallet.disconnect}>
                   disconnect
                 </button>
+                {msg && (
+                  <span style={{ color: msg.startsWith("✓") ? "var(--green)" : "var(--stamp)" }}>
+                    {msg}
+                  </span>
+                )}
               </>
             ) : (
               <button className="faucet" onClick={() => wallet.connect()}>
                 connect wallet
               </button>
-            )}
-          </div>
-          <div className="wallet-strip">
-            <input
-              value={airdropTo}
-              onChange={(e) => setAirdropTo(e.target.value)}
-              placeholder="airdrop 1000 USDC to any wallet…"
-              aria-label="Airdrop destination wallet"
-              style={{
-                background: "var(--card)",
-                border: "1px solid var(--rule)",
-                color: "var(--ink)",
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                padding: "3px 8px",
-                width: 300,
-              }}
-            />
-            <button
-              className="faucet"
-              disabled={fauceting || !airdropTo.trim()}
-              onClick={() => faucet(airdropTo.trim())}
-            >
-              airdrop
-            </button>
-            {msg && (
-              <span style={{ color: msg.startsWith("✓") ? "var(--green)" : "var(--stamp)" }}>{msg}</span>
             )}
           </div>
         </div>
@@ -155,7 +132,7 @@ export default function App() {
         <Bettor config={config} wallet={wallet} onBalanceChange={balance.refresh} />
       </div>
       <div hidden={tab !== "house"}>
-        <House wallet={wallet} onBalanceChange={balance.refresh} />
+        <House wallet={wallet} usdcBalance={balance.amount} onBalanceChange={balance.refresh} />
       </div>
 
       <WalletPicker wallet={wallet} />
